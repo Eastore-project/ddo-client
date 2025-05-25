@@ -4,6 +4,9 @@
 [submodule "lib/openzeppelin-contracts"]
 	path = contracts/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
-[submodule "lib/filecoin-solidity"]
+[submodule "contracts/lib/filecoin-solidity"]
 	path = contracts/lib/filecoin-solidity
 	url = https://github.com/filecoin-project/filecoin-solidity
+[submodule "contracts/lib/buffer"]
+	path = contracts/lib/buffer
+	url = https://github.com/ensdomains/buffer
