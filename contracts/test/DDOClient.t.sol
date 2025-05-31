@@ -16,10 +16,10 @@ contract DDOClientTest is Test {
     function testCreateSingleAllocationRequestSerialization() public {
         // Dummy piece CID (32 bytes representing a piece CID)
         bytes
-            memory pieceCid = hex"0181e20392202077dc1ec600545b888bc0852b6ed77cbd498c402aa29555c2b3374e8a7c0e4816";
+            memory pieceCid = hex"0181e20392202097ac67599c3bdb554a7c6e7af107d3339346dfd53ff7ff23fa4a5d0f551e592f";
 
         // Dummy parameters
-        uint64 size = 536870912; // 1 GiB
+        uint64 size = 8388608; // 1 GiB
         uint64 provider = 17840; // Miner ID
         int64 termMin = 518400; // ~180 days in epochs (assuming 30s epochs)
         int64 termMax = 5256000; // ~540 days in epochs
@@ -313,7 +313,7 @@ contract DDOClientTest is Test {
 
         // Provided CBOR hex data
         bytes
-            memory cborData = hex"8281861945b0d82a5828000181e20392202077dc1ec600545b888bc0852b6ed77cbd498c402aa29555c2b3374e8a7c0e48161a200000001a0007e9001a005033401a002bb6bd80";
+            memory cborData = hex"8281861945b0d82a5828000181e20392202097ac67599c3bdb554a7c6e7af107d3339346dfd53ff7ff23fa4a5d0f551e592f1a008000001a0007e9001a005033401a002bd6a080";
 
         console.log("Input CBOR data length:", cborData.length);
         console.log("Input CBOR data (hex):");
@@ -416,6 +416,130 @@ contract DDOClientTest is Test {
             keccak256(bytes(reserializedHex)),
             "Hex strings should match"
         );
+
+        console.log("=== TEST PASSED ===");
+    }
+
+    function testDeserializeVerifregResponse() public view {
+        console.log("=== Testing Deserialize Verifreg Response ===");
+
+        // The hex data you provided: 0x838201808200808119f535
+        // This CBOR decodes to: [[1, []], [0, []], [62773]]
+        // Which corresponds to:
+        // VerifregResponse {
+        //   allocationResults: BatchReturn { success_count: 1, fail_codes: [] },
+        //   extensionResults:  BatchReturn { success_count: 0, fail_codes: [] },
+        //   newAllocations:    [62773]
+        // }
+        bytes memory cborData = hex"838201808200808119f535";
+
+        console.log("Input CBOR data length:", cborData.length);
+        console.log("Input CBOR data (hex):");
+        console.logBytes(cborData);
+
+        // Call the deserialize function
+        DDOTypes.VerifregResponse memory response = ddoClient
+            .deserializeVerifregResponse(cborData);
+
+        console.log("=== DESERIALIZATION RESULTS ===");
+
+        // Log AllocationResults
+        console.log("AllocationResults:");
+        console.log(
+            "  Success Count:",
+            response.allocationResults.success_count // Changed to success_count
+        );
+        console.log(
+            "  Fail Codes Length:",
+            response.allocationResults.fail_codes.length // Changed to fail_codes
+        );
+        for (
+            uint256 i = 0;
+            i < response.allocationResults.fail_codes.length;
+            i++
+        ) {
+            console.log(
+                "  Fail Code Index:",
+                response.allocationResults.fail_codes[i].idx // Access idx
+            );
+            console.log(
+                "  Fail Code Code:",
+                response.allocationResults.fail_codes[i].code // Access code
+            );
+        }
+
+        // Log ExtensionResults
+        console.log("ExtensionResults:");
+        console.log(
+            "  Success Count:",
+            response.extensionResults.success_count // Changed to success_count
+        );
+        console.log(
+            "  Fail Codes Length:",
+            response.extensionResults.fail_codes.length // Changed to fail_codes
+        );
+        for (
+            uint256 i = 0;
+            i < response.extensionResults.fail_codes.length;
+            i++
+        ) {
+            console.log(
+                "  Fail Code Index:",
+                response.extensionResults.fail_codes[i].idx // Access idx
+            );
+            console.log(
+                "  Fail Code Code:",
+                response.extensionResults.fail_codes[i].code // Access code
+            );
+        }
+
+        // Log NewAllocations
+        console.log("NewAllocations:");
+        console.log("  Length:", response.newAllocations.length);
+        for (uint256 i = 0; i < response.newAllocations.length; i++) {
+            console.log(
+                "  New Allocation",
+                i + 1,
+                ":",
+                response.newAllocations[i]
+            );
+        }
+
+        // Verify expected values based on your JSON
+        assertEq(
+            response.allocationResults.success_count, // Changed to success_count
+            1,
+            "AllocationResults success count should be 1"
+        );
+        assertEq(
+            response.allocationResults.fail_codes.length, // Changed to fail_codes
+            0,
+            "AllocationResults fail_codes length should be 0"
+        );
+
+        assertEq(
+            response.extensionResults.success_count, // Changed to success_count
+            0,
+            "ExtensionResults success count should be 0"
+        );
+        assertEq(
+            response.extensionResults.fail_codes.length, // Changed to fail_codes
+            0,
+            "ExtensionResults fail_codes length should be 0"
+        );
+
+        assertEq(
+            response.newAllocations.length,
+            1,
+            "NewAllocations length should be 1"
+        );
+        if (response.newAllocations.length == 1) {
+            assertEq(
+                response.newAllocations[0],
+                62773,
+                "NewAllocation ID should be 62773"
+            );
+        }
 
         console.log("=== TEST PASSED ===");
     }

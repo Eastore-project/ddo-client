@@ -2,36 +2,30 @@
 pragma solidity ^0.8.27;
 
 import {DDOTypes} from "./DDOTypes.sol";
+import {VerifRegTypes} from "lib/filecoin-solidity/contracts/v0.8/types/VerifRegTypes.sol";
 import {VerifRegSerialization} from "./VerifRegSerialization.sol";
 import {DataCapAPI} from "lib/filecoin-solidity/contracts/v0.8/DataCapAPI.sol";
 import {DataCapTypes} from "lib/filecoin-solidity/contracts/v0.8/types/DataCapTypes.sol";
 import {CommonTypes} from "lib/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
 import {FilAddresses} from "lib/filecoin-solidity/contracts/v0.8/utils/FilAddresses.sol";
+import {PrecompilesAPI} from "lib/filecoin-solidity/contracts/v0.8/PrecompilesAPI.sol";
+import {VerifRegAPI} from "lib/filecoin-solidity/contracts/v0.8/VerifRegAPI.sol";
 
 contract DDOClient is DDOTypes {
     /**
      * @notice Creates allocation requests and transfers DataCap to the DataCap actor
      * @param pieceInfos Array of piece information to create allocations for
-     * @return totalDataCap Total datacap required for all allocations
-     * @return receiverParams Serialized receiver params as bytes
      * @return recipientData Data returned from the DataCap transfer
      */
     function createAllocationRequests(
         PieceInfo[] memory pieceInfos
-    )
-        public
-        returns (
-            uint256 totalDataCap,
-            bytes memory receiverParams,
-            bytes memory recipientData
-        )
-    {
+    ) public returns (bytes memory recipientData) {
         require(pieceInfos.length > 0, "No piece infos provided");
 
         AllocationRequest[] memory allocationRequests = new AllocationRequest[](
             pieceInfos.length
         );
-        totalDataCap = 0;
+        uint256 totalDataCap = 0;
 
         int64 currentEpoch = int64(int256(block.number));
 
@@ -68,16 +62,37 @@ contract DDOClient is DDOTypes {
         }
 
         // Serialize allocation requests to CBOR bytes (receiver params)
-        receiverParams = VerifRegSerialization.serializeVerifregOperatorData(
-            allocationRequests
-        );
+        bytes memory receiverParams = VerifRegSerialization
+            .serializeVerifregOperatorData(allocationRequests);
 
         emit ReceiverParamsGenerated(receiverParams);
 
         // Transfer DataCap to the DataCap actor (not the miner)
-        recipientData = _transferDataCapToActor(totalDataCap, receiverParams);
+        recipientData = _transferDataCap(totalDataCap, receiverParams);
 
-        return (totalDataCap, receiverParams, recipientData);
+        // Deserialize recipientData and store allocation IDs
+        if (recipientData.length > 0) {
+            DDOTypes.VerifregResponse
+                memory verifregResponse = VerifRegSerialization
+                    .deserializeVerifregResponse(recipientData);
+            if (verifregResponse.newAllocations.length > 0) {
+                for (
+                    uint256 i = 0;
+                    i < verifregResponse.newAllocations.length;
+                    i++
+                ) {
+                    allocationIdsByClient[msg.sender].push(
+                        verifregResponse.newAllocations[i]
+                    );
+                }
+                emit AllocationIdsStored(
+                    msg.sender,
+                    verifregResponse.newAllocations
+                );
+            }
+        }
+
+        return recipientData;
     }
 
     /**
@@ -89,7 +104,6 @@ contract DDOClient is DDOTypes {
      * @param termMax Maximum term
      * @param expirationOffset Expiration offset from current block
      * @param downloadURL Download URL for the piece
-     * @return receiverParams Serialized receiver params as bytes
      * @return recipientData Data returned from the DataCap transfer
      */
     function createSingleAllocationRequest(
@@ -100,10 +114,7 @@ contract DDOClient is DDOTypes {
         int64 termMax,
         int64 expirationOffset,
         string memory downloadURL
-    )
-        external
-        returns (bytes memory receiverParams, bytes memory recipientData)
-    {
+    ) external returns (bytes memory recipientData) {
         PieceInfo[] memory pieceInfos = new PieceInfo[](1);
         pieceInfos[0] = PieceInfo({
             pieceCid: pieceCid,
@@ -115,10 +126,8 @@ contract DDOClient is DDOTypes {
             downloadURL: downloadURL
         });
 
-        (, receiverParams, recipientData) = createAllocationRequests(
-            pieceInfos
-        );
-        return (receiverParams, recipientData);
+        recipientData = createAllocationRequests(pieceInfos);
+        return recipientData;
     }
 
     /**
@@ -127,17 +136,17 @@ contract DDOClient is DDOTypes {
      * @param operatorData Serialized allocation request data containing provider info
      * @return recipientData Data returned from the transfer
      */
-    function _transferDataCapToActor(
+    function _transferDataCap(
         uint256 amount,
         bytes memory operatorData
     ) internal returns (bytes memory recipientData) {
         // Get DataCap actor address using the actor ID (7) from DataCapTypes
         CommonTypes.FilAddress memory dataCapActorAddress = FilAddresses
-            .fromActorID(CommonTypes.FilActorId.unwrap(DataCapTypes.ActorID));
+            .fromActorID(CommonTypes.FilActorId.unwrap(VerifRegTypes.ActorID));
 
         // Convert amount to BigInt
         CommonTypes.BigInt memory transferAmount = CommonTypes.BigInt({
-            val: abi.encodePacked(amount),
+            val: abi.encodePacked(amount * 10 ** 18),
             neg: false
         });
 
@@ -186,7 +195,11 @@ contract DDOClient is DDOTypes {
      */
     function createAllocationRequestsOnly(
         PieceInfo[] memory pieceInfos
-    ) external returns (uint256 totalDataCap, bytes memory receiverParams) {
+    )
+        external
+        view
+        returns (uint256 totalDataCap, bytes memory receiverParams)
+    {
         require(pieceInfos.length > 0, "No piece infos provided");
 
         AllocationRequest[] memory allocationRequests = new AllocationRequest[](
@@ -216,24 +229,12 @@ contract DDOClient is DDOTypes {
             });
 
             totalDataCap += info.size;
-
-            emit AllocationRequestCreated(
-                info.provider,
-                info.pieceCid,
-                info.size,
-                info.termMin,
-                info.termMax,
-                expiration,
-                info.downloadURL
-            );
         }
 
         // Serialize allocation requests to CBOR bytes (receiver params)
         receiverParams = VerifRegSerialization.serializeVerifregOperatorData(
             allocationRequests
         );
-
-        emit ReceiverParamsGenerated(receiverParams);
 
         return (totalDataCap, receiverParams);
     }
@@ -266,6 +267,16 @@ contract DDOClient is DDOTypes {
             VerifRegSerialization.serializeVerifregOperatorData(
                 allocationRequests
             );
+    }
+
+    /**
+     * @notice Public wrapper for testing deserializeVerifregResponse
+     * @param cborData The CBOR encoded verification registry response
+     */
+    function deserializeVerifregResponse(
+        bytes memory cborData
+    ) external pure returns (VerifregResponse memory) {
+        return VerifRegSerialization.deserializeVerifregResponse(cborData);
     }
 
     function transfer(DataCapTypes.TransferParams calldata params) public {
@@ -313,5 +324,104 @@ contract DDOClient is DDOTypes {
         }
 
         return (0, codec, ret);
+    }
+
+    /**
+     * @notice Get claim information for a specific client and claim ID
+     * @param clientAddress The address of the client
+     * @param claimId The ID of the claim to retrieve
+     * @return claims An array of Claim structs, empty if not found or an error occurred
+     */
+    function getClaimInfoForClient(
+        address clientAddress,
+        uint64 claimId
+    ) external view returns (VerifRegTypes.Claim[] memory claims) {
+        // Check if the claimId is associated with the clientAddress in our records
+        bool claimFoundLocally = false;
+        uint64[] memory clientAllocations = allocationIdsByClient[
+            clientAddress
+        ];
+        for (uint256 i = 0; i < clientAllocations.length; i++) {
+            if (clientAllocations[i] == claimId) {
+                claimFoundLocally = true;
+                break;
+            }
+        }
+
+        if (!claimFoundLocally) {
+            return claims; // Return empty array if claimId is not associated with clientAddress locally
+        }
+
+        // Resolve this contract's actor ID to use as the provider
+        uint64 contractActorId = PrecompilesAPI.resolveEthAddress(
+            address(this)
+        );
+
+        // Prepare params for VerifRegAPI.getClaims
+        CommonTypes.FilActorId[]
+            memory claimIdsToFetch = new CommonTypes.FilActorId[](1);
+        claimIdsToFetch[0] = CommonTypes.FilActorId.wrap(claimId);
+
+        VerifRegTypes.GetClaimsParams memory params = VerifRegTypes
+            .GetClaimsParams({
+                provider: CommonTypes.FilActorId.wrap(contractActorId),
+                claim_ids: claimIdsToFetch
+            });
+
+        // Call VerifRegAPI.getClaims
+        (
+            int256 exitCode,
+            VerifRegTypes.GetClaimsReturn memory getClaimsReturn
+        ) = VerifRegAPI.getClaims(params);
+
+        if (exitCode != 0) {
+            revert GetClaimsFailed(exitCode);
+        }
+
+        // If the call was successful but no claims were returned for this ID (e.g., success_count is 0)
+        // or if the claims array is unexpectedly empty, return an empty array.
+        // VerifRegAPI.getClaims should ideally return at least one claim if success_count > 0 for a single ID query.
+        if (
+            getClaimsReturn.batch_info.success_count == 0 ||
+            getClaimsReturn.claims.length == 0
+        ) {
+            return claims; // Return empty array
+        }
+
+        return getClaimsReturn.claims;
+    }
+
+    /**
+     * @notice Get claim information for a specific provider and claim ID
+     * @param providerActorId The actor ID of the provider
+     * @param claimId The ID of the claim to retrieve
+     * @return getClaimsReturn The GetClaimsReturn struct containing batch info and claims
+     */
+    function getClaimInfo(
+        uint64 providerActorId,
+        uint64 claimId
+    ) external view returns (VerifRegTypes.GetClaimsReturn memory) {
+        // Prepare params for VerifRegAPI.getClaims
+        CommonTypes.FilActorId[]
+            memory claimIdsToFetch = new CommonTypes.FilActorId[](1);
+        claimIdsToFetch[0] = CommonTypes.FilActorId.wrap(claimId);
+
+        VerifRegTypes.GetClaimsParams memory params = VerifRegTypes
+            .GetClaimsParams({
+                provider: CommonTypes.FilActorId.wrap(providerActorId),
+                claim_ids: claimIdsToFetch
+            });
+
+        // Call VerifRegAPI.getClaims
+        (
+            int256 exitCode,
+            VerifRegTypes.GetClaimsReturn memory getClaimsReturnData
+        ) = VerifRegAPI.getClaims(params);
+
+        if (exitCode != 0) {
+            revert GetClaimsFailed(exitCode);
+        }
+
+        return getClaimsReturnData;
     }
 }

@@ -13,13 +13,16 @@ abstract contract DDOTypes {
     address public constant DATACAP_ACTOR_ETH_ADDRESS =
         0xfF00000000000000000000000000000000000007;
 
+    // Mapping
+    mapping(address => uint64[]) public allocationIdsByClient;
+
     // Structs
     struct PieceInfo {
         bytes pieceCid; // Piece CID as bytes
         uint64 size; // Piece size
         uint64 provider; // Provider/Miner ID
         int64 termMin; // Minimum term
-        int64 termMax; // Maximum term
+        int64 termMax;
         int64 expirationOffset; // Expiration offset from current block
         string downloadURL; // Download URL for the piece
     }
@@ -36,6 +39,13 @@ abstract contract DDOTypes {
     struct ProviderClaim {
         CommonTypes.FilActorId provider;
         CommonTypes.FilActorId claim;
+    }
+
+    // Verification Registry Response Types
+    struct VerifregResponse {
+        CommonTypes.BatchReturn allocationResults;
+        CommonTypes.BatchReturn extensionResults;
+        uint64[] newAllocations;
     }
 
     // Events
@@ -57,6 +67,8 @@ abstract contract DDOTypes {
 
     event ReceivedDataCap(string message);
 
+    event AllocationIdsStored(address indexed client, uint64[] allocationIds);
+
     // Errors
     error InvalidOperatorData();
     error InvalidAllocationRequest();
@@ -64,4 +76,5 @@ abstract contract DDOTypes {
     error UnauthorizedMethod();
     error DataCapTransferError(int256 exitCode);
     error InvalidProvider();
+    error GetClaimsFailed(int256 exitCode);
 }
