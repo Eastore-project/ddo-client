@@ -1,0 +1,11 @@
+[
+  {
+    "pieceCid": "baga6ea4seaqhpxa6yyafiw4irpaikk3o256l2smmiavkffkvykztotukpqheqfq",
+    "size": 8388608,
+    "provider": 17840,
+    "termMin": 518400,
+    "termMax": 5256000,
+    "expirationOffset": 172800,
+    "downloadURL": "https://example.com/download/piece1"
+  }
+] 

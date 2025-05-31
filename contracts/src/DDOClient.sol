@@ -327,6 +327,28 @@ contract DDOClient is DDOTypes {
     }
 
     /**
+     * @notice Get all allocation IDs for a specific client
+     * @param clientAddress The address of the client
+     * @return allocationIds Array of all allocation IDs for the client
+     */
+    function getAllocationIdsForClient(
+        address clientAddress
+    ) external view returns (uint64[] memory allocationIds) {
+        return allocationIdsByClient[clientAddress];
+    }
+
+    /**
+     * @notice Get the number of allocations for a specific client
+     * @param clientAddress The address of the client
+     * @return count The number of allocations for the client
+     */
+    function getAllocationCountForClient(
+        address clientAddress
+    ) external view returns (uint256 count) {
+        return allocationIdsByClient[clientAddress].length;
+    }
+
+    /**
      * @notice Get claim information for a specific client and claim ID
      * @param clientAddress The address of the client
      * @param claimId The ID of the claim to retrieve
