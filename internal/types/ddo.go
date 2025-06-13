@@ -20,3 +20,15 @@ type AllocationRequest struct {
     TermMax    int64
     Expiration int64
 }
+
+// Claim represents the Claim struct from VerifRegTypes.sol
+type Claim struct {
+    Provider  uint64 `json:"provider"`  // FilActorId
+    Client    uint64 `json:"client"`    // FilActorId
+    Data      []byte `json:"data"`      // bytes
+    Size      uint64 `json:"size"`      // uint64
+    TermMin   int64  `json:"termMin"`   // ChainEpoch
+    TermMax   int64  `json:"termMax"`   // ChainEpoch
+    TermStart int64  `json:"termStart"` // ChainEpoch
+    Sector    uint64 `json:"sector"`    // FilActorId
+}

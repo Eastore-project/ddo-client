@@ -50,22 +50,14 @@ contract DDOClient is DDOTypes {
 
             totalDataCap += info.size;
 
-            emit AllocationRequestCreated(
-                info.provider,
-                info.pieceCid,
-                info.size,
-                info.termMin,
-                info.termMax,
-                expiration,
-                info.downloadURL
-            );
+            // Store allocation request info for later event emission with allocation ID
         }
 
         // Serialize allocation requests to CBOR bytes (receiver params)
         bytes memory receiverParams = VerifRegSerialization
             .serializeVerifregOperatorData(allocationRequests);
 
-        emit ReceiverParamsGenerated(receiverParams);
+        // ReceiverParamsGenerated event removed as requested
 
         // Transfer DataCap to the DataCap actor (not the miner)
         recipientData = _transferDataCap(totalDataCap, receiverParams);
@@ -76,19 +68,41 @@ contract DDOClient is DDOTypes {
                 memory verifregResponse = VerifRegSerialization
                     .deserializeVerifregResponse(recipientData);
             if (verifregResponse.newAllocations.length > 0) {
+                require(
+                    verifregResponse.newAllocations.length == pieceInfos.length,
+                    "Allocation count mismatch"
+                );
+
                 for (
                     uint256 i = 0;
                     i < verifregResponse.newAllocations.length;
                     i++
                 ) {
-                    allocationIdsByClient[msg.sender].push(
-                        verifregResponse.newAllocations[i]
+                    uint64 allocationId = verifregResponse.newAllocations[i];
+                    PieceInfo memory info = pieceInfos[i];
+
+                    // Store allocation ID for client
+                    allocationIdsByClient[msg.sender].push(allocationId);
+
+                    // Store provider mapping for this allocation
+                    allocationIdToProvider[allocationId] = info.provider;
+
+                    // Emit combined event with allocation info and ID
+                    int64 expiration = int64(int256(block.number)) +
+                        info.expirationOffset;
+
+                    emit AllocationCreated(
+                        msg.sender,
+                        allocationId,
+                        info.provider,
+                        info.pieceCid,
+                        info.size,
+                        info.termMin,
+                        info.termMax,
+                        expiration,
+                        info.downloadURL
                     );
                 }
-                emit AllocationIdsStored(
-                    msg.sender,
-                    verifregResponse.newAllocations
-                );
             }
         }
 
@@ -165,7 +179,6 @@ contract DDOClient is DDOTypes {
         ) = DataCapAPI.transfer(transferParams);
 
         if (exitCode != 0) {
-            emit DataCapTransferFailed(exitCode, amount);
             revert DataCapTransferError(exitCode);
         }
 
@@ -195,11 +208,7 @@ contract DDOClient is DDOTypes {
      */
     function createAllocationRequestsOnly(
         PieceInfo[] memory pieceInfos
-    )
-        external
-        view
-        returns (uint256 totalDataCap, bytes memory receiverParams)
-    {
+    ) external returns (uint256 totalDataCap, bytes memory receiverParams) {
         require(pieceInfos.length > 0, "No piece infos provided");
 
         AllocationRequest[] memory allocationRequests = new AllocationRequest[](
@@ -229,6 +238,17 @@ contract DDOClient is DDOTypes {
             });
 
             totalDataCap += info.size;
+            emit AllocationCreated(
+                msg.sender,
+                10,
+                info.provider,
+                info.pieceCid,
+                info.size,
+                info.termMin,
+                info.termMax,
+                expiration,
+                info.downloadURL
+            );
         }
 
         // Serialize allocation requests to CBOR bytes (receiver params)
@@ -357,27 +377,15 @@ contract DDOClient is DDOTypes {
     function getClaimInfoForClient(
         address clientAddress,
         uint64 claimId
-    ) external view returns (VerifRegTypes.Claim[] memory claims) {
-        // Check if the claimId is associated with the clientAddress in our records
-        bool claimFoundLocally = false;
-        uint64[] memory clientAllocations = allocationIdsByClient[
-            clientAddress
-        ];
-        for (uint256 i = 0; i < clientAllocations.length; i++) {
-            if (clientAllocations[i] == claimId) {
-                claimFoundLocally = true;
-                break;
-            }
-        }
-
-        if (!claimFoundLocally) {
-            return claims; // Return empty array if claimId is not associated with clientAddress locally
-        }
-
-        // Resolve this contract's actor ID to use as the provider
-        uint64 contractActorId = PrecompilesAPI.resolveEthAddress(
-            address(this)
-        );
+    )
+        external
+        view
+        onlyValidClaimForClient(clientAddress, claimId)
+        returns (VerifRegTypes.Claim[] memory claims)
+    {
+        // Get the provider ID for this allocation from our mapping
+        uint64 providerActorId = allocationIdToProvider[claimId];
+        require(providerActorId != 0, "Provider not found for allocation");
 
         // Prepare params for VerifRegAPI.getClaims
         CommonTypes.FilActorId[]
@@ -386,7 +394,7 @@ contract DDOClient is DDOTypes {
 
         VerifRegTypes.GetClaimsParams memory params = VerifRegTypes
             .GetClaimsParams({
-                provider: CommonTypes.FilActorId.wrap(contractActorId),
+                provider: CommonTypes.FilActorId.wrap(providerActorId),
                 claim_ids: claimIdsToFetch
             });
 
@@ -407,7 +415,7 @@ contract DDOClient is DDOTypes {
             getClaimsReturn.batch_info.success_count == 0 ||
             getClaimsReturn.claims.length == 0
         ) {
-            return claims; // Return empty array
+            revert NoClaimsFound();
         }
 
         return getClaimsReturn.claims;

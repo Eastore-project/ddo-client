@@ -88,6 +88,31 @@ const DDOClientABI = `[
         "stateMutability": "view"
     },
     {
+        "type": "function",
+        "name": "getClaimInfoForClient",
+        "inputs": [
+            {"name": "clientAddress", "type": "address"},
+            {"name": "claimId", "type": "uint64"}
+        ],
+        "outputs": [
+            {
+                "name": "claims",
+                "type": "tuple[]",
+                "components": [
+                    {"name": "provider", "type": "uint64"},
+                    {"name": "client", "type": "uint64"},
+                    {"name": "data", "type": "bytes"},
+                    {"name": "size", "type": "uint64"},
+                    {"name": "termMin", "type": "int64"},
+                    {"name": "termMax", "type": "int64"},
+                    {"name": "termStart", "type": "int64"},
+                    {"name": "sector", "type": "uint64"}
+                ]
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
         "type": "event",
         "name": "AllocationRequestCreated",
         "inputs": [

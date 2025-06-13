@@ -15,6 +15,7 @@ abstract contract DDOTypes {
 
     // Mapping
     mapping(address => uint64[]) public allocationIdsByClient;
+    mapping(uint64 => uint64) public allocationIdToProvider;
 
     // Structs
     struct PieceInfo {
@@ -49,8 +50,10 @@ abstract contract DDOTypes {
     }
 
     // Events
-    event AllocationRequestCreated(
-        uint64 provider,
+    event AllocationCreated(
+        address indexed client,
+        uint64 indexed allocationId,
+        uint64 indexed provider,
         bytes data,
         uint64 size,
         int64 termMin,
@@ -59,15 +62,27 @@ abstract contract DDOTypes {
         string downloadURL
     );
 
-    event ReceiverParamsGenerated(bytes receiverParams);
-
     event DataCapTransferSuccess(uint256 totalDataCap, bytes recipientData);
-
-    event DataCapTransferFailed(int256 exitCode, uint256 totalDataCap);
 
     event ReceivedDataCap(string message);
 
-    event AllocationIdsStored(address indexed client, uint64[] allocationIds);
+    // Modifiers
+    modifier onlyValidClaimForClient(address clientAddress, uint64 claimId) {
+        bool claimFoundLocally = false;
+        uint64[] memory clientAllocations = allocationIdsByClient[
+            clientAddress
+        ];
+        for (uint256 i = 0; i < clientAllocations.length; i++) {
+            if (clientAllocations[i] == claimId) {
+                claimFoundLocally = true;
+                break;
+            }
+        }
+        if (!claimFoundLocally) {
+            revert InvalidClaimIdForClient();
+        }
+        _;
+    }
 
     // Errors
     error InvalidOperatorData();
@@ -77,4 +92,6 @@ abstract contract DDOTypes {
     error DataCapTransferError(int256 exitCode);
     error InvalidProvider();
     error GetClaimsFailed(int256 exitCode);
+    error InvalidClaimIdForClient();
+    error NoClaimsFound();
 }

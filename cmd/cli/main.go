@@ -38,6 +38,7 @@ func main() {
 			commands.CreateAllocationRequestsCommand(),
 			commands.CreateAllocationFromFilesCommand(),
 			commands.QueryAllocationsCommand(),
+			commands.QueryClaimInfoCommand(),
 			// Future commands will be added here
 		},
 	}
