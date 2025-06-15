@@ -454,4 +454,15 @@ contract DDOClient is DDOTypes {
 
         return getClaimsReturnData;
     }
+
+    /**
+     * @notice Mock function to authenticate proposal by decoding bytes to string to test curio mk20
+     * @param data The bytes data to decode
+     * @return The decoded string
+     */
+    function mockAuthenticateCurioProposal(
+        bytes memory data
+    ) external view returns (string memory) {
+        return abi.decode(data, (string));
+    }
 }
