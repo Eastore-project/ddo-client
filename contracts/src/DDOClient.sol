@@ -2,6 +2,10 @@
 pragma solidity ^0.8.27;
 
 import {DDOTypes} from "./DDOTypes.sol";
+import {DDOSp} from "./DDOSp.sol";
+import {IPayments} from "./IPayments.sol";
+import {DDOArbiter} from "./DDOArbiter.sol";
+import {MockDDO} from "./MockDDO.sol";
 import {VerifRegTypes} from "lib/filecoin-solidity/contracts/v0.8/types/VerifRegTypes.sol";
 import {VerifRegSerialization} from "./VerifRegSerialization.sol";
 import {DataCapAPI} from "lib/filecoin-solidity/contracts/v0.8/DataCapAPI.sol";
@@ -11,7 +15,94 @@ import {FilAddresses} from "lib/filecoin-solidity/contracts/v0.8/utils/FilAddres
 import {PrecompilesAPI} from "lib/filecoin-solidity/contracts/v0.8/PrecompilesAPI.sol";
 import {VerifRegAPI} from "lib/filecoin-solidity/contracts/v0.8/VerifRegAPI.sol";
 
-contract DDOClient is DDOTypes {
+contract DDOClient is DDOTypes, DDOSp, DDOArbiter, MockDDO {
+    /**
+     * @notice Set the payments contract address
+     * @param _paymentsContract Address of the payments contract
+     */
+    function setPaymentsContract(address _paymentsContract) external onlyOwner {
+        require(
+            _paymentsContract != address(0),
+            "Invalid payments contract address"
+        );
+        paymentsContract = IPayments(_paymentsContract);
+    }
+
+    /**
+     * @notice Set the commission rate for storage provider payments
+     * @param _commissionRateBps Commission rate in basis points (max 100 = 1%)
+     */
+    function setCommissionRate(uint256 _commissionRateBps) external onlyOwner {
+        require(
+            _commissionRateBps <= MAX_COMMISSION_RATE_BPS,
+            "Commission rate exceeds maximum"
+        );
+        commissionRateBps = _commissionRateBps;
+    }
+
+    // remove override when not testing
+    /**
+     * @notice Internal function to create a payment rail for one allocation
+     * @param pieceInfo Single piece information
+     * @param allocationId The allocation ID to associate with this rail
+     * @return railId The created rail ID
+     */
+    function _initiatePaymentRail(
+        PieceInfo memory pieceInfo,
+        uint64 allocationId
+    ) internal override returns (uint256 railId) {
+        if (address(paymentsContract) == address(0)) {
+            revert PaymentsContractNotSet();
+        }
+
+        // Get storage provider configuration
+        SPConfig memory spConfig = spConfigs[pieceInfo.provider];
+        require(spConfig.paymentAddress != address(0), "SP not registered");
+
+        // Create payment rail between client and storage provider for this allocation
+        railId = paymentsContract.createRail(
+            pieceInfo.paymentTokenAddress, // token
+            msg.sender, // from (client)
+            spConfig.paymentAddress, // to (storage provider)
+            address(this), // arbiter (DDOClient contract as arbiter)
+            commissionRateBps // commission rate
+        );
+
+        // Get and validate the price per byte per epoch for the payment token
+        uint256 pricePerBytePerEpoch = this.getAndValidateSPPrice(
+            pieceInfo.provider,
+            pieceInfo.paymentTokenAddress
+        );
+
+        // Calculate fixed lockup amount (piece size * price per byte per epoch * epochs per month)
+        uint256 fixedLockupAmount = pieceInfo.size *
+            pricePerBytePerEpoch *
+            EPOCHS_PER_MONTH;
+
+        // Do fixed lockup from client to do one time payment when SP claims
+        // payment for first time. Fixed lockup would then be made 0.
+        paymentsContract.modifyRailLockup(
+            railId,
+            0, // lockup period (0 epochs)
+            fixedLockupAmount // fixed lockup amount
+        );
+
+        // Store the mapping from allocation ID to rail ID
+        allocationIdToRailId[allocationId] = railId;
+
+        // Emit event for rail creation with allocation ID
+        emit RailCreated(
+            msg.sender,
+            spConfig.paymentAddress,
+            pieceInfo.paymentTokenAddress,
+            railId,
+            pieceInfo.provider,
+            allocationId
+        );
+
+        return railId;
+    }
+
     /**
      * @notice Creates allocation requests and transfers DataCap to the DataCap actor
      * @param pieceInfos Array of piece information to create allocations for
@@ -19,8 +110,16 @@ contract DDOClient is DDOTypes {
      */
     function createAllocationRequests(
         PieceInfo[] memory pieceInfos
-    ) public returns (bytes memory recipientData) {
+    )
+        public
+        onlyValidPieceForSP(pieceInfos)
+        returns (bytes memory recipientData)
+    {
         require(pieceInfos.length > 0, "No piece infos provided");
+        require(
+            address(paymentsContract) != address(0),
+            "Payments contract not set"
+        );
 
         AllocationRequest[] memory allocationRequests = new AllocationRequest[](
             pieceInfos.length
@@ -87,6 +186,9 @@ contract DDOClient is DDOTypes {
                     // Store provider mapping for this allocation
                     allocationIdToProvider[allocationId] = info.provider;
 
+                    // Create payment rail for this allocation
+                    _initiatePaymentRail(info, allocationId);
+
                     // Emit combined event with allocation info and ID
                     int64 expiration = int64(int256(block.number)) +
                         info.expirationOffset;
@@ -118,6 +220,7 @@ contract DDOClient is DDOTypes {
      * @param termMax Maximum term
      * @param expirationOffset Expiration offset from current block
      * @param downloadURL Download URL for the piece
+     * @param paymentTokenAddress Token address client is willing to pay with
      * @return recipientData Data returned from the DataCap transfer
      */
     function createSingleAllocationRequest(
@@ -127,7 +230,8 @@ contract DDOClient is DDOTypes {
         int64 termMin,
         int64 termMax,
         int64 expirationOffset,
-        string memory downloadURL
+        string memory downloadURL,
+        address paymentTokenAddress
     ) external returns (bytes memory recipientData) {
         PieceInfo[] memory pieceInfos = new PieceInfo[](1);
         pieceInfos[0] = PieceInfo({
@@ -137,7 +241,8 @@ contract DDOClient is DDOTypes {
             termMin: termMin,
             termMax: termMax,
             expirationOffset: expirationOffset,
-            downloadURL: downloadURL
+            downloadURL: downloadURL,
+            paymentTokenAddress: paymentTokenAddress
         });
 
         recipientData = createAllocationRequests(pieceInfos);
@@ -201,62 +306,42 @@ contract DDOClient is DDOTypes {
     }
 
     /**
-     * @notice Create allocation requests without transferring DataCap (for testing)
-     * @param pieceInfos Array of piece information to create allocations for
-     * @return totalDataCap Total datacap required for all allocations
-     * @return receiverParams Serialized receiver params as bytes
+     * @notice Get the rail ID for a specific allocation
+     * @param allocationId The allocation ID
+     * @return railId The corresponding rail ID (0 if not found)
      */
-    function createAllocationRequestsOnly(
-        PieceInfo[] memory pieceInfos
-    ) external returns (uint256 totalDataCap, bytes memory receiverParams) {
-        require(pieceInfos.length > 0, "No piece infos provided");
+    function getRailIdForAllocation(
+        uint64 allocationId
+    ) external view returns (uint256 railId) {
+        return allocationIdToRailId[allocationId];
+    }
 
-        AllocationRequest[] memory allocationRequests = new AllocationRequest[](
-            pieceInfos.length
-        );
-        totalDataCap = 0;
+    /**
+     * @notice Get allocation and rail information together
+     * @param allocationId The allocation ID
+     * @return railId The corresponding rail ID
+     * @return providerId The storage provider ID
+     * @return railView Detailed rail information (if rail exists)
+     */
+    function getAllocationRailInfo(
+        uint64 allocationId
+    )
+        external
+        view
+        returns (
+            uint256 railId,
+            uint64 providerId,
+            IPayments.RailView memory railView
+        )
+    {
+        railId = allocationIdToRailId[allocationId];
+        providerId = allocationIdToProvider[allocationId];
 
-        int64 currentEpoch = int64(int256(block.number));
-
-        // Create allocation requests from piece infos
-        for (uint256 i = 0; i < pieceInfos.length; i++) {
-            PieceInfo memory info = pieceInfos[i];
-
-            // Validate piece size is reasonable (basic validation)
-            require(info.size > 0, "Invalid piece size");
-            require(info.provider > 0, "Invalid provider ID");
-
-            int64 expiration = currentEpoch + info.expirationOffset;
-
-            allocationRequests[i] = AllocationRequest({
-                provider: info.provider,
-                data: info.pieceCid,
-                size: info.size,
-                termMin: info.termMin,
-                termMax: info.termMax,
-                expiration: expiration
-            });
-
-            totalDataCap += info.size;
-            emit AllocationCreated(
-                msg.sender,
-                10,
-                info.provider,
-                info.pieceCid,
-                info.size,
-                info.termMin,
-                info.termMax,
-                expiration,
-                info.downloadURL
-            );
+        if (railId > 0 && address(paymentsContract) != address(0)) {
+            railView = paymentsContract.getRail(railId);
         }
 
-        // Serialize allocation requests to CBOR bytes (receiver params)
-        receiverParams = VerifRegSerialization.serializeVerifregOperatorData(
-            allocationRequests
-        );
-
-        return (totalDataCap, receiverParams);
+        return (railId, providerId, railView);
     }
 
     /**
@@ -297,15 +382,6 @@ contract DDOClient is DDOTypes {
         bytes memory cborData
     ) external pure returns (VerifregResponse memory) {
         return VerifRegSerialization.deserializeVerifregResponse(cborData);
-    }
-
-    function transfer(DataCapTypes.TransferParams calldata params) public {
-        int256 exitCode;
-        /// @custom:oz-upgrades-unsafe-allow-reachable delegatecall
-        (exitCode, ) = DataCapAPI.transfer(params);
-        if (exitCode != 0) {
-            revert DataCapTransferError(exitCode);
-        }
     }
 
     /**
@@ -430,7 +506,7 @@ contract DDOClient is DDOTypes {
     function getClaimInfo(
         uint64 providerActorId,
         uint64 claimId
-    ) external view returns (VerifRegTypes.GetClaimsReturn memory) {
+    ) public view returns (VerifRegTypes.GetClaimsReturn memory) {
         // Prepare params for VerifRegAPI.getClaims
         CommonTypes.FilActorId[]
             memory claimIdsToFetch = new CommonTypes.FilActorId[](1);
@@ -456,13 +532,184 @@ contract DDOClient is DDOTypes {
     }
 
     /**
-     * @notice Mock function to authenticate proposal by decoding bytes to string to test curio mk20
-     * @param data The bytes data to decode
-     * @return The decoded string
+     * @notice Get payment rails for a client and token
+     * @param client The client address
+     * @param token The token address
+     * @return railInfos Array of rail information
      */
-    function mockAuthenticateCurioProposal(
-        bytes memory data
-    ) external view returns (string memory) {
-        return abi.decode(data, (string));
+    function getClientRailsForToken(
+        address client,
+        address token
+    ) external view returns (IPayments.RailInfo[] memory railInfos) {
+        require(
+            address(paymentsContract) != address(0),
+            "Payments contract not set"
+        );
+        return paymentsContract.getRailsForPayerAndToken(client, token);
+    }
+
+    /**
+     * @notice Get detailed rail information by rail ID
+     * @param railId The rail ID to query
+     * @return railView Detailed rail information
+     */
+    function getRailDetails(
+        uint256 railId
+    ) external view returns (IPayments.RailView memory railView) {
+        require(
+            address(paymentsContract) != address(0),
+            "Payments contract not set"
+        );
+        return paymentsContract.getRail(railId);
+    }
+
+    /**
+     * @notice Settle storage provider payment for an allocation
+     * @param allocationId The allocation ID to settle payment for
+     */
+    function settleSpFirstPayment(uint64 allocationId) external {
+        // Check if allocation exists and get provider ID
+        uint64 providerId = allocationIdToProvider[allocationId];
+        require(providerId > 0, "Allocation not found");
+
+        // Check if provider is registered
+        SPConfig memory spConfig = spConfigs[providerId];
+        if (spConfig.paymentAddress == address(0)) {
+            revert InvalidProvider();
+        }
+
+        // Get claim information for this allocation
+        VerifRegTypes.GetClaimsReturn memory claimsReturn = getClaimInfo(
+            providerId,
+            allocationId
+        );
+
+        // Verify that claim was successfully retrieved
+        require(
+            claimsReturn.batch_info.success_count > 0,
+            "Failed to get claim info"
+        );
+        require(
+            claimsReturn.claims.length > 0,
+            "No claims found for allocation"
+        );
+
+        // Get the rail ID corresponding to this allocation
+        uint256 railId = allocationIdToRailId[allocationId];
+        require(railId > 0, "No rail found for allocation");
+
+        // Check if payments contract is set
+        if (address(paymentsContract) == address(0)) {
+            revert PaymentsContractNotSet();
+        }
+
+        // Get rail details
+        IPayments.RailView memory rail = paymentsContract.getRail(railId);
+
+        // Corrected type conversion from uint64 to uint256
+        uint256 pricePerEpoch = this.getSPActivePricePerBytePerEpoch(
+            providerId,
+            rail.token
+        ) * claimsReturn.claims[0].size;
+
+        // Check payment rate and handle accordingly
+        if (rail.paymentRate == 0) {
+            // Handle case when payment rate is 0 (settled or special state)
+            _handleZeroPaymentRate(
+                railId,
+                uint256(
+                    uint64(
+                        CommonTypes.ChainEpoch.unwrap(
+                            claimsReturn.claims[0].term_start
+                        )
+                    )
+                ),
+                pricePerEpoch
+            );
+        }
+    }
+
+    /**
+     * @notice Settle storage provider payment for an allocation (complete settlement)
+     * @param allocationId The allocation ID to settle payment for
+     * @param untilEpoch The epoch until which to settle the rail
+     * @return totalSettledAmount Total amount settled
+     * @return totalNetPayeeAmount Net amount paid to payee
+     * @return totalPaymentFee Payment fees deducted
+     * @return totalOperatorCommission Commission paid to operator
+     * @return finalSettledEpoch Final epoch settled up to
+     * @return note Settlement note
+     */
+    function settleSpPayment(
+        uint64 allocationId,
+        uint256 untilEpoch
+    )
+        external
+        returns (
+            uint256 totalSettledAmount,
+            uint256 totalNetPayeeAmount,
+            uint256 totalPaymentFee,
+            uint256 totalOperatorCommission,
+            uint256 finalSettledEpoch,
+            string memory note
+        )
+    {
+        // First, handle the initial payment setup if needed
+        this.settleSpFirstPayment(allocationId);
+
+        // Get the rail ID for this allocation
+        uint256 railId = allocationIdToRailId[allocationId];
+        require(railId > 0, "No rail found for allocation");
+
+        // Check if payments contract is set
+        if (address(paymentsContract) == address(0)) {
+            revert PaymentsContractNotSet();
+        }
+
+        // Settle the rail up to the specified epoch
+        return paymentsContract.settleRail(railId, untilEpoch);
+    }
+
+    // remove override when not testing
+    /**
+     * @notice Handle settlement when rail payment rate is 0
+     * @param railId The rail ID
+     * @param termStart The term start epoch from claim
+     * @param pricePerEpoch The SP's price per epoch
+     */
+    function _handleZeroPaymentRate(
+        uint256 railId,
+        uint256 termStart,
+        uint256 pricePerEpoch
+    ) internal override {
+        // Validate term start
+        require(termStart >= 0, "Invalid term start");
+        require(block.number >= termStart, "Current block before term start");
+
+        // Calculate one-time payment for elapsed time
+        uint256 elapsedEpochs = block.number - termStart;
+        uint256 elapsedTimePayment = pricePerEpoch * elapsedEpochs;
+
+        // Calculate monthly payment cap
+        uint256 monthlyPayment = pricePerEpoch * EPOCHS_PER_MONTH;
+
+        // Use minimum of elapsed time payment or monthly payment
+        uint256 oneTimePayment = elapsedTimePayment < monthlyPayment
+            ? elapsedTimePayment
+            : monthlyPayment;
+
+        // Modify rail payment with calculated rate and one-time payment
+        paymentsContract.modifyRailPayment(
+            railId,
+            pricePerEpoch,
+            oneTimePayment
+        );
+
+        // Set up ongoing payments with monthly lockup period and no fixed lockup
+        paymentsContract.modifyRailLockup(
+            railId,
+            EPOCHS_PER_MONTH, // lockup period (one month)
+            0 // fixed lockup amount (0)
+        );
     }
 }

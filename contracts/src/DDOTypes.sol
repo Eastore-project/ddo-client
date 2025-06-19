@@ -2,6 +2,7 @@
 pragma solidity ^0.8.27;
 
 import {CommonTypes} from "lib/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
+import {IPayments} from "./IPayments.sol";
 
 /**
  * @title DDOTypes
@@ -12,10 +13,17 @@ abstract contract DDOTypes {
     uint64 public constant DATACAP_RECEIVER_HOOK_METHOD_NUM = 3726118371;
     address public constant DATACAP_ACTOR_ETH_ADDRESS =
         0xfF00000000000000000000000000000000000007;
+    // Payment system constants and variables
+    uint256 public constant MAX_COMMISSION_RATE_BPS = 100; // 1% maximum commission
+    uint256 public commissionRateBps = 50; // Default 0.5% commission rate
+
+    // Payments contract interface
+    IPayments public paymentsContract;
 
     // Mapping
     mapping(address => uint64[]) public allocationIdsByClient;
     mapping(uint64 => uint64) public allocationIdToProvider;
+    mapping(uint64 => uint256) public allocationIdToRailId;
 
     // Structs
     struct PieceInfo {
@@ -26,6 +34,7 @@ abstract contract DDOTypes {
         int64 termMax;
         int64 expirationOffset; // Expiration offset from current block
         string downloadURL; // Download URL for the piece
+        address paymentTokenAddress; // Token address client is willing to pay with
     }
 
     struct AllocationRequest {
@@ -62,6 +71,14 @@ abstract contract DDOTypes {
         string downloadURL
     );
 
+    event RailCreated(
+        address indexed client,
+        address indexed storageProvider,
+        address indexed token,
+        uint256 railId,
+        uint64 providerId,
+        uint64 allocationId
+    );
     event DataCapTransferSuccess(uint256 totalDataCap, bytes recipientData);
 
     event ReceivedDataCap(string message);
@@ -94,4 +111,6 @@ abstract contract DDOTypes {
     error GetClaimsFailed(int256 exitCode);
     error InvalidClaimIdForClient();
     error NoClaimsFound();
+    error PaymentsContractNotSet();
+    error RailCreationFailed();
 }
