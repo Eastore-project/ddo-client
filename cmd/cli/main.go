@@ -2,11 +2,15 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/urfave/cli/v2"
 
 	"ddo-client/internal/commands"
+	"ddo-client/internal/commands/allocations"
+	"ddo-client/internal/commands/payments"
+	"ddo-client/internal/commands/sp"
 	"ddo-client/internal/config"
 )
 
@@ -35,16 +39,16 @@ func main() {
 			},
 		},
 		Commands: []*cli.Command{
-			commands.CreateAllocationRequestsCommand(),
-			commands.CreateAllocationFromFilesCommand(),
-			commands.QueryAllocationsCommand(),
-			commands.QueryClaimInfoCommand(),
+			allocations.AllocationsCommand(),
+			payments.PaymentsCommand(),
+			sp.SPCommand(),
+			commands.ApproveTokenCommand(),
 			// Future commands will be added here
 		},
 	}
 
-	if err := app.Run(os.Args); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+	err := app.Run(os.Args)
+	if err != nil {
+		log.Fatal(err)
 	}
 } 

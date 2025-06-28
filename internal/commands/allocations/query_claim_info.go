@@ -1,4 +1,4 @@
-package commands
+package allocations
 
 import (
 	"encoding/hex"
@@ -9,7 +9,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"ddo-client/internal/config"
-	"ddo-client/internal/contract"
+	"ddo-client/internal/contract/ddo"
 )
 
 func QueryClaimInfoCommand() *cli.Command {
@@ -26,7 +26,7 @@ func QueryClaimInfoCommand() *cli.Command {
 			&cli.StringFlag{
 				Name:    "rpc",
 				Aliases: []string{"r"},
-				Usage:   "RPC endpoint (overrides RPC_ENDPOINT env var)",
+				Usage:   "RPC endpoint (overrides RPC_URL env var)",
 			},
 			&cli.StringFlag{
 				Name:     "client-address",
@@ -64,7 +64,7 @@ func executeQueryClaimInfo(c *cli.Context) error {
 		missing = append(missing, "DDO_CONTRACT_ADDRESS")
 	}
 	if config.RPCEndpoint == "" {
-		missing = append(missing, "RPC_ENDPOINT")
+		missing = append(missing, "RPC_URL")
 	}
 
 	if len(missing) > 0 {
@@ -91,7 +91,7 @@ func executeQueryClaimInfo(c *cli.Context) error {
 	}
 
 	// Create contract client (read-only, no private key needed)
-	client, err := contract.NewReadOnlyClient()
+	client, err := ddo.NewReadOnlyClient()
 	if err != nil {
 		return fmt.Errorf("failed to create contract client: %v", err)
 	}

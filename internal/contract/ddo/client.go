@@ -1,4 +1,4 @@
-package contract
+package ddo
 
 import (
 	"context"
@@ -110,4 +110,36 @@ func NewReadOnlyClient() (*Client, error) {
 		abi:          contractABI,
 		privateKey:   nil, // No private key for read-only operations
 	}, nil
+}
+
+// GetPaymentsContract returns the payments contract address from the DDO contract
+func (c *Client) GetPaymentsContract() (common.Address, error) {
+	var result []interface{}
+	err := c.contract.Call(&bind.CallOpts{Context: context.Background()}, &result, "paymentsContract")
+	if err != nil {
+		return common.Address{}, fmt.Errorf("failed to get payments contract address: %w", err)
+	}
+	
+	if len(result) == 0 {
+		return common.Address{}, fmt.Errorf("no result returned from paymentsContract call")
+	}
+	
+	paymentsAddress, ok := result[0].(common.Address)
+	if !ok {
+		return common.Address{}, fmt.Errorf("failed to parse payments contract address: %T", result[0])
+	}
+	
+	return paymentsAddress, nil
+}
+
+// Close closes the Ethereum client connection
+func (c *Client) Close() {
+	if c.ethClient != nil {
+		c.ethClient.Close()
+	}
+}
+
+// GetEthClient returns the underlying Ethereum client
+func (c *Client) GetEthClient() *ethclient.Client {
+	return c.ethClient
 } 

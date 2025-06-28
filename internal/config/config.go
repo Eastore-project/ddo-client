@@ -4,15 +4,17 @@ import "os"
 
 // Global configuration variables
 var (
-	RPCEndpoint     string
-	ContractAddress string
-	PrivateKey      string
+	RPCEndpoint            string
+	ContractAddress        string
+	PaymentsContractAddress string
+	PrivateKey             string
 )
 
 // LoadFromEnv loads configuration from environment variables with defaults
 func LoadFromEnv() {
-	RPCEndpoint = getEnvWithDefault("RPC_ENDPOINT", "http://localhost:8545")
+	RPCEndpoint = getEnvWithDefault("RPC_URL", "http://localhost:8545")
 	ContractAddress = getEnvWithDefault("DDO_CONTRACT_ADDRESS", "")
+	PaymentsContractAddress = getEnvWithDefault("PAYMENTS_CONTRACT_ADDRESS", "")
 	PrivateKey = getEnvWithDefault("PRIVATE_KEY", "")
 }
 

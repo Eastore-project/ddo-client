@@ -1,0 +1,21 @@
+{
+    "_comment": "Storage Provider Token Configuration",
+    "_description": "Prices are in USD per TB per month. The system automatically converts to token units (USDC with 6 decimals) and then to bytes per epoch for contract storage.",
+    "_examples": [
+        "10.00 = $10 USD per TB per month",
+        "0.50 = $0.50 USD per TB per month",
+        "25.99 = $25.99 USD per TB per month"
+    ],
+    "tokens": [
+        {
+            "token": "0x1234567890123456789012345678901234567890",
+            "priceUSDPerTBPerMonth": "10.00",
+            "isActive": true
+        },
+        {
+            "token": "0x0987654321098765432109876543210987654321",
+            "priceUSDPerTBPerMonth": "15.50",
+            "isActive": true
+        }
+    ]
+}

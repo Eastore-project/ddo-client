@@ -1,4 +1,4 @@
-package contract
+package ddo
 
 import (
 	"context"
@@ -32,6 +32,7 @@ func (c *Client) CreateSingleAllocationRequest(pieceInfo types.PieceInfo) (strin
 		pieceInfo.TermMax,
 		pieceInfo.ExpirationOffset,
 		pieceInfo.DownloadURL,
+		pieceInfo.PaymentTokenAddress,
 	)
 	if err != nil {
 		return "", fmt.Errorf("failed to send transaction: %w", err)
