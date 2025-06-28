@@ -16,7 +16,13 @@ import {PrecompilesAPI} from "lib/filecoin-solidity/contracts/v0.8/PrecompilesAP
 import {VerifRegAPI} from "lib/filecoin-solidity/contracts/v0.8/VerifRegAPI.sol";
 import {ReentrancyGuard} from "lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 
-contract DDOClient is DDOTypes, DDOSp, DDOValidator, ReentrancyGuard {
+contract DDOClientTest is
+    DDOTypes,
+    DDOSp,
+    DDOValidator,
+    ReentrancyGuard,
+    MockDDO
+{
     /**
      * @notice Set the payments contract address
      * @param _paymentsContract Address of the payments contract
@@ -39,6 +45,7 @@ contract DDOClient is DDOTypes, DDOSp, DDOValidator, ReentrancyGuard {
         commissionRateBps = _commissionRateBps;
     }
 
+    // remove override when not testing
     /**
      * @notice Internal function to create a payment rail for one allocation
      * @param pieceInfo Single piece information
@@ -48,7 +55,7 @@ contract DDOClient is DDOTypes, DDOSp, DDOValidator, ReentrancyGuard {
     function _initiatePaymentRail(
         PieceInfo memory pieceInfo,
         uint64 allocationId
-    ) internal returns (uint256 railId) {
+    ) internal override returns (uint256 railId) {
         if (address(paymentsContract) == address(0)) {
             revert PaymentsContractNotSet();
         }
@@ -301,19 +308,19 @@ contract DDOClient is DDOTypes, DDOSp, DDOValidator, ReentrancyGuard {
         return transferResult.recipient_data;
     }
 
-    // /**
-    //  * @notice Get the total datacap required for piece infos without creating the request
-    //  * @param pieceInfos Array of piece information
-    //  * @return totalDataCap Total datacap required
-    //  */
-    // function calculateTotalDataCap(
-    //     PieceInfo[] memory pieceInfos
-    // ) external pure returns (uint256 totalDataCap) {
-    //     for (uint256 i = 0; i < pieceInfos.length; i++) {
-    //         totalDataCap += pieceInfos[i].size;
-    //     }
-    //     return totalDataCap;
-    // }
+    /**
+     * @notice Get the total datacap required for piece infos without creating the request
+     * @param pieceInfos Array of piece information
+     * @return totalDataCap Total datacap required
+     */
+    function calculateTotalDataCap(
+        PieceInfo[] memory pieceInfos
+    ) external pure returns (uint256 totalDataCap) {
+        for (uint256 i = 0; i < pieceInfos.length; i++) {
+            totalDataCap += pieceInfos[i].size;
+        }
+        return totalDataCap;
+    }
 
     // /**
     //  * @notice Get the rail ID for a specific allocation
@@ -325,137 +332,6 @@ contract DDOClient is DDOTypes, DDOSp, DDOValidator, ReentrancyGuard {
     // ) external view returns (uint256 railId) {
     //     return allocationIdToRailId[allocationId];
     // }
-
-    /**
-     * @notice Settle storage provider payment for an allocation
-     * @param allocationId The allocation ID to settle payment for
-     */
-    function settleSpFirstPayment(uint64 allocationId) external {
-        // Check if allocation exists and get provider ID
-        uint64 providerId = allocationIdToProvider[allocationId];
-        if (providerId == 0) {
-            revert AllocationNotFound();
-        }
-
-        // Check if provider is registered
-        SPConfig memory spConfig = spConfigs[providerId];
-        if (spConfig.paymentAddress == address(0)) {
-            revert InvalidProvider();
-        }
-
-        // Get claim information for this allocation
-        VerifRegTypes.GetClaimsReturn memory claimsReturn = getClaimInfo(
-            providerId,
-            allocationId
-        );
-
-        // Verify that claim was successfully retrieved
-        if (claimsReturn.batch_info.success_count == 0) {
-            revert FailedToGetClaimInfo();
-        }
-        if (claimsReturn.claims.length == 0) {
-            revert NoClaimsFoundForAllocation();
-        }
-
-        // Get the rail ID corresponding to this allocation
-        uint256 railId = allocationIdToRailId[allocationId];
-
-        // Check if payments contract is set
-        if (address(paymentsContract) == address(0)) {
-            revert PaymentsContractNotSet();
-        }
-
-        // Get rail details
-        IPayments.RailView memory rail = paymentsContract.getRail(railId);
-
-        // Corrected type conversion from uint64 to uint256
-        uint256 pricePerEpoch = this.getSPActivePricePerBytePerEpoch(
-            providerId,
-            rail.token
-        ) * claimsReturn.claims[0].size;
-
-        // Check payment rate and handle accordingly
-        if (rail.paymentRate == 0) {
-            // Handle case when payment rate is 0 (settled or special state)
-            _handleZeroPaymentRate(
-                railId,
-                uint256(
-                    uint64(
-                        CommonTypes.ChainEpoch.unwrap(
-                            claimsReturn.claims[0].term_start
-                        )
-                    )
-                ),
-                pricePerEpoch
-            );
-        }
-    }
-
-    /**
-     * @notice Settle storage provider payment for an allocation (complete settlement)
-     * @param allocationId The allocation ID to settle payment for
-     * @param untilEpoch The epoch until which to settle the rail
-     * @return totalSettledAmount Total amount settled
-     * @return totalNetPayeeAmount Net amount paid to payee
-     * @return totalPaymentFee Payment fees deducted
-     * @return totalOperatorCommission Commission paid to operator
-     * @return finalSettledEpoch Final epoch settled up to
-     * @return note Settlement note
-     */
-    function settleSpPayment(
-        uint64 allocationId,
-        uint256 untilEpoch
-    )
-        external
-        returns (
-            uint256 totalSettledAmount,
-            uint256 totalNetPayeeAmount,
-            uint256 totalPaymentFee,
-            uint256 totalOperatorCommission,
-            uint256 finalSettledEpoch,
-            string memory note
-        )
-    {
-        // First, handle the initial payment setup if needed
-        this.settleSpFirstPayment(allocationId);
-
-        // Get the rail ID for this allocation
-        uint256 railId = allocationIdToRailId[allocationId];
-        if (railId == 0) {
-            revert NoRailFoundForAllocation();
-        }
-
-        // Check if payments contract is set
-        if (address(paymentsContract) == address(0)) {
-            revert PaymentsContractNotSet();
-        }
-
-        // Settle the rail up to the specified epoch
-        return paymentsContract.settleRail(railId, untilEpoch);
-    }
-
-    /**
-     * @notice Settle storage provider payment for all allocations until specified epoch
-     * @param providerId The storage provider ID to settle payments for
-     * @param untilEpoch The epoch until which to settle all rails
-     */
-    function settleSpTotalPayment(
-        uint64 providerId,
-        uint256 untilEpoch
-    ) external {
-        // Get all allocation IDs for this provider
-        uint64[] memory allocationIds = allocationIdsByProvider[providerId];
-        if (allocationIds.length == 0) {
-            revert NoAllocationsFoundForProvider();
-        }
-
-        // Settle payment for each allocation
-        for (uint256 i = 0; i < allocationIds.length; i++) {
-            uint64 allocationId = allocationIds[i];
-
-            this.settleSpPayment(allocationId, untilEpoch);
-        }
-    }
 
     /**
      * @notice Get allocation and rail information together
@@ -485,45 +361,45 @@ contract DDOClient is DDOTypes, DDOSp, DDOValidator, ReentrancyGuard {
         return (railId, providerId, railView);
     }
 
-    // /**
-    //  * @notice Public wrapper for testing deserializeVerifregOperatorData
-    //  * @param cborData The cbor encoded operator data
-    //  */
-    // function deserializeVerifregOperatorData(
-    //     bytes memory cborData
-    // )
-    //     external
-    //     pure
-    //     returns (
-    //         ProviderClaim[] memory claimExtensions,
-    //         AllocationRequest[] memory allocationRequests
-    //     )
-    // {
-    //     return VerifRegSerialization.deserializeVerifregOperatorData(cborData);
-    // }
+    /**
+     * @notice Public wrapper for testing deserializeVerifregOperatorData
+     * @param cborData The cbor encoded operator data
+     */
+    function deserializeVerifregOperatorData(
+        bytes memory cborData
+    )
+        external
+        pure
+        returns (
+            ProviderClaim[] memory claimExtensions,
+            AllocationRequest[] memory allocationRequests
+        )
+    {
+        return VerifRegSerialization.deserializeVerifregOperatorData(cborData);
+    }
 
-    // /**
-    //  * @notice Public wrapper for testing serializeVerifregOperatorData
-    //  * @param allocationRequests Array of allocation requests to serialize
-    //  */
-    // function serializeVerifregOperatorData(
-    //     AllocationRequest[] memory allocationRequests
-    // ) external pure returns (bytes memory) {
-    //     return
-    //         VerifRegSerialization.serializeVerifregOperatorData(
-    //             allocationRequests
-    //         );
-    // }
+    /**
+     * @notice Public wrapper for testing serializeVerifregOperatorData
+     * @param allocationRequests Array of allocation requests to serialize
+     */
+    function serializeVerifregOperatorData(
+        AllocationRequest[] memory allocationRequests
+    ) external pure returns (bytes memory) {
+        return
+            VerifRegSerialization.serializeVerifregOperatorData(
+                allocationRequests
+            );
+    }
 
     // /**
     //  * @notice Public wrapper for testing deserializeVerifregResponse
     //  * @param cborData The CBOR encoded verification registry response
     //  */
-    // function deserializeVerifregResponse(
-    //     bytes memory cborData
-    // ) external pure returns (VerifregResponse memory) {
-    //     return VerifRegSerialization.deserializeVerifregResponse(cborData);
-    // }
+    function deserializeVerifregResponse(
+        bytes memory cborData
+    ) external pure returns (VerifregResponse memory) {
+        return VerifRegSerialization.deserializeVerifregResponse(cborData);
+    }
 
     /**
      * @notice Handles the receipt of DataCap.
@@ -706,6 +582,141 @@ contract DDOClient is DDOTypes, DDOSp, DDOValidator, ReentrancyGuard {
     // }
 
     /**
+     * @notice Settle storage provider payment for an allocation
+     * @param allocationId The allocation ID to settle payment for
+     */
+    function settleSpFirstPayment(uint64 allocationId) external nonReentrant {
+        // Check if allocation exists and get provider ID
+        uint64 providerId = allocationIdToProvider[allocationId];
+        if (providerId == 0) {
+            revert AllocationNotFound();
+        }
+
+        // Check if provider is registered
+        SPConfig memory spConfig = spConfigs[providerId];
+        if (spConfig.paymentAddress == address(0)) {
+            revert InvalidProvider();
+        }
+
+        // Get claim information for this allocation
+        VerifRegTypes.GetClaimsReturn memory claimsReturn = getClaimInfo(
+            providerId,
+            allocationId
+        );
+
+        // Verify that claim was successfully retrieved
+        if (claimsReturn.batch_info.success_count == 0) {
+            revert FailedToGetClaimInfo();
+        }
+        if (claimsReturn.claims.length == 0) {
+            revert NoClaimsFoundForAllocation();
+        }
+
+        // Get the rail ID corresponding to this allocation
+        uint256 railId = allocationIdToRailId[allocationId];
+        if (railId == 0) {
+            revert NoRailFoundForAllocation();
+        }
+
+        // Check if payments contract is set
+        if (address(paymentsContract) == address(0)) {
+            revert PaymentsContractNotSet();
+        }
+
+        // Get rail details
+        IPayments.RailView memory rail = paymentsContract.getRail(railId);
+
+        // Corrected type conversion from uint64 to uint256
+        uint256 pricePerEpoch = this.getSPActivePricePerBytePerEpoch(
+            providerId,
+            rail.token
+        ) * claimsReturn.claims[0].size;
+
+        // Check payment rate and handle accordingly
+        if (rail.paymentRate == 0) {
+            // Handle case when payment rate is 0 (settled or special state)
+            _handleZeroPaymentRate(
+                railId,
+                uint256(
+                    uint64(
+                        CommonTypes.ChainEpoch.unwrap(
+                            claimsReturn.claims[0].term_start
+                        )
+                    )
+                ),
+                pricePerEpoch
+            );
+        }
+    }
+
+    /**
+     * @notice Settle storage provider payment for an allocation (complete settlement)
+     * @param allocationId The allocation ID to settle payment for
+     * @param untilEpoch The epoch until which to settle the rail
+     * @return totalSettledAmount Total amount settled
+     * @return totalNetPayeeAmount Net amount paid to payee
+     * @return totalPaymentFee Payment fees deducted
+     * @return totalOperatorCommission Commission paid to operator
+     * @return finalSettledEpoch Final epoch settled up to
+     * @return note Settlement note
+     */
+    function settleSpPayment(
+        uint64 allocationId,
+        uint256 untilEpoch
+    )
+        external
+        nonReentrant
+        returns (
+            uint256 totalSettledAmount,
+            uint256 totalNetPayeeAmount,
+            uint256 totalPaymentFee,
+            uint256 totalOperatorCommission,
+            uint256 finalSettledEpoch,
+            string memory note
+        )
+    {
+        // First, handle the initial payment setup if needed
+        this.settleSpFirstPayment(allocationId);
+
+        // Get the rail ID for this allocation
+        uint256 railId = allocationIdToRailId[allocationId];
+        if (railId == 0) {
+            revert NoRailFoundForAllocation();
+        }
+
+        // Check if payments contract is set
+        if (address(paymentsContract) == address(0)) {
+            revert PaymentsContractNotSet();
+        }
+
+        // Settle the rail up to the specified epoch
+        return paymentsContract.settleRail(railId, untilEpoch);
+    }
+
+    /**
+     * @notice Settle storage provider payment for all allocations until specified epoch
+     * @param providerId The storage provider ID to settle payments for
+     * @param untilEpoch The epoch until which to settle all rails
+     */
+    function settleSpTotalPayment(
+        uint64 providerId,
+        uint256 untilEpoch
+    ) external nonReentrant {
+        // Get all allocation IDs for this provider
+        uint64[] memory allocationIds = allocationIdsByProvider[providerId];
+        if (allocationIds.length == 0) {
+            revert NoAllocationsFoundForProvider();
+        }
+
+        // Settle payment for each allocation
+        for (uint256 i = 0; i < allocationIds.length; i++) {
+            uint64 allocationId = allocationIds[i];
+
+            this.settleSpPayment(allocationId, untilEpoch);
+        }
+    }
+
+    /**
      * @notice Get all allocation IDs for a specific storage provider
      * @param providerId The storage provider ID
      * @return allocationIds Array of all allocation IDs for the provider
@@ -727,6 +738,7 @@ contract DDOClient is DDOTypes, DDOSp, DDOValidator, ReentrancyGuard {
     //     return allocationIdsByProvider[providerId].length;
     // }
 
+    // remove override when not testing
     /**
      * @notice Handle settlement when rail payment rate is 0
      * @param railId The rail ID
@@ -737,7 +749,7 @@ contract DDOClient is DDOTypes, DDOSp, DDOValidator, ReentrancyGuard {
         uint256 railId,
         uint256 termStart,
         uint256 pricePerEpoch
-    ) internal nonReentrant {
+    ) internal override {
         // Validate term start
         if (termStart < 0) {
             revert InvalidTermStart();
@@ -758,11 +770,7 @@ contract DDOClient is DDOTypes, DDOSp, DDOValidator, ReentrancyGuard {
             ? elapsedTimePayment
             : monthlyPayment;
 
-        paymentsContract.modifyRailPayment(
-            railId,
-            pricePerEpoch,
-            oneTimePayment
-        );
+        paymentsContract.modifyRailPayment(railId, 0, oneTimePayment);
 
         // Set up ongoing payments with monthly lockup period and no fixed lockup
         paymentsContract.modifyRailLockup(
@@ -770,5 +778,8 @@ contract DDOClient is DDOTypes, DDOSp, DDOValidator, ReentrancyGuard {
             EPOCHS_PER_MONTH, // lockup period (one month)
             0 // fixed lockup amount (0)
         );
+
+        // Modify rail payment with calculated rate and one-time payment
+        paymentsContract.modifyRailPayment(railId, pricePerEpoch, 0);
     }
 }

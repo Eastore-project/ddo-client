@@ -24,6 +24,7 @@ abstract contract DDOTypes {
     mapping(address => uint64[]) public allocationIdsByClient;
     mapping(uint64 => uint64) public allocationIdToProvider;
     mapping(uint64 => uint256) public allocationIdToRailId;
+    mapping(uint64 => uint64[]) public allocationIdsByProvider;
 
     // Structs
     struct PieceInfo {
@@ -113,4 +114,17 @@ abstract contract DDOTypes {
     error NoClaimsFound();
     error PaymentsContractNotSet();
     error RailCreationFailed();
+    error InvalidPaymentsContract();
+    error CommissionRateExceedsMaximum();
+    error NoPieceInfosProvided();
+    error InvalidPieceSize();
+    error InvalidProviderId();
+    error AllocationCountMismatch();
+    error AllocationNotFound();
+    error FailedToGetClaimInfo();
+    error NoClaimsFoundForAllocation();
+    error NoRailFoundForAllocation();
+    error InvalidTermStart();
+    error CurrentBlockBeforeTermStart();
+    error NoAllocationsFoundForProvider();
 }

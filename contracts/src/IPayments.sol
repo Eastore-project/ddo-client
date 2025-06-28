@@ -10,18 +10,21 @@ interface IPayments {
         uint256 lockupLastSettledAt;
     }
 
+    // Struct to hold rail data without the RateChangeQueue (for external returns)
     struct RailView {
         address token;
         address from;
         address to;
         address operator;
-        address arbiter;
+        address validator;
         uint256 paymentRate;
         uint256 lockupPeriod;
         uint256 lockupFixed;
         uint256 settledUpTo;
         uint256 endEpoch;
+        // Operator commission rate in basis points (e.g., 100 BPS = 1%)
         uint256 commissionRateBps;
+        address serviceFeeRecipient; // address to collect operator commission
     }
 
     struct OperatorApproval {
@@ -78,8 +81,9 @@ interface IPayments {
         address token,
         address from,
         address to,
-        address arbiter,
-        uint256 commissionRateBps
+        address validator,
+        uint256 commissionRateBps,
+        address serviceFeeRecipient
     ) external returns (uint256);
 
     function modifyRailLockup(
@@ -93,19 +97,6 @@ interface IPayments {
         uint256 newRate,
         uint256 oneTimePayment
     ) external;
-
-    function settleTerminatedRailWithoutArbitration(
-        uint256 railId
-    )
-        external
-        returns (
-            uint256 totalSettledAmount,
-            uint256 totalNetPayeeAmount,
-            uint256 totalPaymentFee,
-            uint256 totalOperatorCommission,
-            uint256 finalSettledEpoch,
-            string memory note
-        );
 
     function settleRail(
         uint256 railId,

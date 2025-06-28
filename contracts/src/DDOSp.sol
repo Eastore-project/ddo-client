@@ -352,14 +352,14 @@ contract DDOSp is DDOTypes, Ownable {
 
     // ======================== GETTER FUNCTIONS ========================
 
-    /**
-     * @notice Get complete SP configuration
-     */
-    function getSPConfig(
-        uint64 actorId
-    ) external view onlyRegisteredSP(actorId) returns (SPConfig memory) {
-        return spConfigs[actorId];
-    }
+    // /**
+    //  * @notice Get complete SP configuration
+    //  */
+    // function getSPConfig(
+    //     uint64 actorId
+    // ) external view onlyRegisteredSP(actorId) returns (SPConfig memory) {
+    //     return spConfigs[actorId];
+    // }
 
     /**
      * @notice Get token price for specific SP and token (per epoch)

@@ -2,15 +2,15 @@
 pragma solidity ^0.8.27;
 
 import {Test, console} from "forge-std/Test.sol";
-import {DDOClient} from "../src/DDOClient.sol";
+import {DDOClientTest} from "../src/DDOClientTest.sol";
 import {DDOTypes} from "../src/DDOTypes.sol";
 import {CommonTypes} from "lib/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
 
-contract DDOClientTest is Test {
-    DDOClient public ddoClient;
+contract DDOClientTests is Test {
+    DDOClientTest public ddoClient;
 
     function setUp() public {
-        ddoClient = new DDOClient();
+        ddoClient = new DDOClientTest();
     }
 
     function testCreateSingleAllocationRequestSerialization() public {
@@ -46,11 +46,12 @@ contract DDOClientTest is Test {
             termMin: termMin,
             termMax: termMax,
             expirationOffset: expirationOffset,
-            downloadURL: downloadURL
+            downloadURL: downloadURL,
+            paymentTokenAddress: address(0) // Add missing field
         });
 
         (uint256 totalDataCap, bytes memory receiverParams) = ddoClient
-            .createAllocationRequestsOnly(pieceInfos);
+            .mockCreateRawAllocationRequests(pieceInfos);
 
         console.log("=== RESULT ===");
         console.log("Total DataCap:", totalDataCap);
@@ -85,7 +86,8 @@ contract DDOClientTest is Test {
             termMin: 518400,
             termMax: 1555200,
             expirationOffset: 2880,
-            downloadURL: "https://provider1.example.com/piece1"
+            downloadURL: "https://provider1.example.com/piece1",
+            paymentTokenAddress: address(0)
         });
 
         // Second piece with different provider
@@ -96,7 +98,8 @@ contract DDOClientTest is Test {
             termMin: 518400,
             termMax: 1555200,
             expirationOffset: 5760, // ~2 days
-            downloadURL: "https://provider2.example.com/piece2"
+            downloadURL: "https://provider2.example.com/piece2",
+            paymentTokenAddress: address(0)
         });
 
         // Third piece with yet another provider
@@ -107,7 +110,8 @@ contract DDOClientTest is Test {
             termMin: 259200, // ~90 days
             termMax: 1036800, // ~360 days
             expirationOffset: 8640, // ~3 days
-            downloadURL: "https://provider3.example.com/piece3"
+            downloadURL: "https://provider3.example.com/piece3",
+            paymentTokenAddress: address(0)
         });
 
         console.log(
@@ -126,7 +130,7 @@ contract DDOClientTest is Test {
         }
 
         (uint256 totalDataCap, bytes memory receiverParams) = ddoClient
-            .createAllocationRequestsOnly(pieceInfos);
+            .mockCreateRawAllocationRequests(pieceInfos);
 
         console.log("=== RESULT ===");
         console.log("Total DataCap:", totalDataCap);
@@ -158,7 +162,8 @@ contract DDOClientTest is Test {
             termMin: 518400,
             termMax: 1555200,
             expirationOffset: 2880,
-            downloadURL: "https://example.com/piece1"
+            downloadURL: "https://example.com/piece1",
+            paymentTokenAddress: address(0)
         });
 
         pieceInfos[1] = DDOTypes.PieceInfo({
@@ -168,7 +173,8 @@ contract DDOClientTest is Test {
             termMin: 518400,
             termMax: 1555200,
             expirationOffset: 5760,
-            downloadURL: "https://example.com/piece2"
+            downloadURL: "https://example.com/piece2",
+            paymentTokenAddress: address(0)
         });
 
         uint256 totalDataCap = ddoClient.calculateTotalDataCap(pieceInfos);
@@ -214,11 +220,12 @@ contract DDOClientTest is Test {
             termMin: termMin,
             termMax: termMax,
             expirationOffset: expirationOffset,
-            downloadURL: downloadURL
+            downloadURL: downloadURL,
+            paymentTokenAddress: address(0)
         });
 
         (uint256 totalDataCap, bytes memory receiverParams) = ddoClient
-            .createAllocationRequestsOnly(pieceInfos);
+            .mockCreateRawAllocationRequests(pieceInfos);
 
         console.log("=== SERIALIZATION RESULT ===");
         console.log("Total DataCap:", totalDataCap);

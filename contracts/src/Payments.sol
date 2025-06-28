@@ -3,35 +3,34 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./RateChangeQueue.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import "./IPayments.sol";
 
-// inherited directly from https://github.com/FilOzone/filecoin-services-payments/blob/main/src/Payments.sol for local testing.
-
-interface IArbiter {
-    struct ArbitrationResult {
-        // The actual payment amount determined by the arbiter after arbitration of a rail during settlement
+interface IValidator {
+    struct ValidationResult {
+        // The actual payment amount determined by the validator after validation of a rail during settlement
         uint256 modifiedAmount;
         // The epoch up to and including which settlement should occur.
         uint256 settleUpto;
-        // A placeholder note for any additional information the arbiter wants to send to the caller of `settleRail`
+        // A placeholder note for any additional information the validator wants to send to the caller of `settleRail`
         string note;
     }
 
-    function arbitratePayment(
+    function validatePayment(
         uint256 railId,
         uint256 proposedAmount,
         // the epoch up to and including which the rail has already been settled
         uint256 fromEpoch,
-        // the epoch up to and including which arbitration is requested; payment will be arbitrated for (toEpoch - fromEpoch) epochs
+        // the epoch up to and including which validation is requested; payment will be validated for (toEpoch - fromEpoch) epochs
         uint256 toEpoch,
         uint256 rate
-    ) external returns (ArbitrationResult memory result);
+    ) external returns (ValidationResult memory result);
 }
 
 // @title Payments contract.
@@ -39,7 +38,7 @@ contract Payments is
     Initializable,
     UUPSUpgradeable,
     OwnableUpgradeable,
-    ReentrancyGuard,
+    ReentrancyGuardUpgradeable,
     IPayments
 {
     using SafeERC20 for IERC20;
@@ -49,14 +48,21 @@ contract Payments is
     uint256 public constant COMMISSION_MAX_BPS = 10000;
 
     uint256 public constant PAYMENT_FEE_BPS = 10; //(0.1 % fee)
-    mapping(uint256 => Rail) internal rails;
+
+    // struct Account {
+    //     uint256 funds;
+    //     uint256 lockupCurrent;
+    //     uint256 lockupRate;
+    //     // epoch up to and including which lockup has been settled for the account
+    //     uint256 lockupLastSettledAt;
+    // }
 
     struct Rail {
         address token;
         address from;
         address to;
         address operator;
-        address arbiter;
+        address validator;
         uint256 paymentRate;
         uint256 lockupPeriod;
         uint256 lockupFixed;
@@ -66,13 +72,43 @@ contract Payments is
         uint256 endEpoch; // Final epoch up to which the rail can be settled (0 if not terminated)
         // Operator commission rate in basis points (e.g., 100 BPS = 1%)
         uint256 commissionRateBps;
+        address serviceFeeRecipient; // address to collect operator comission
     }
+
+    // struct OperatorApproval {
+    //     bool isApproved;
+    //     uint256 rateAllowance;
+    //     uint256 lockupAllowance;
+    //     uint256 rateUsage; // Track actual usage for rate
+    //     uint256 lockupUsage; // Track actual usage for lockup
+    //     uint256 maxLockupPeriod; // Maximum lockup period the operator can set for rails created on behalf of the client
+    // }
 
     // Counter for generating unique rail IDs
     uint256 private _nextRailId = 1;
 
     // token => owner => Account
     mapping(address => mapping(address => Account)) public accounts;
+
+    // railId => Rail
+    mapping(uint256 => Rail) internal rails;
+
+    // // Struct to hold rail data without the RateChangeQueue (for external returns)
+    // struct RailView {
+    //     address token;
+    //     address from;
+    //     address to;
+    //     address operator;
+    //     address validator;
+    //     uint256 paymentRate;
+    //     uint256 lockupPeriod;
+    //     uint256 lockupFixed;
+    //     uint256 settledUpTo;
+    //     uint256 endEpoch;
+    //     // Operator commission rate in basis points (e.g., 100 BPS = 1%)
+    //     uint256 commissionRateBps;
+    //     address serviceFeeRecipient; // address to collect operator commission
+    // }
 
     // token => client => operator => Approval
     mapping(address => mapping(address => mapping(address => OperatorApproval)))
@@ -83,6 +119,13 @@ contract Payments is
 
     // Array to track all tokens that have ever accumulated fees
     address[] private feeTokens;
+
+    // // Define a struct for rails by payee information
+    // struct RailInfo {
+    //     uint256 railId; // The rail ID
+    //     bool isTerminated; // True if rail is terminated
+    //     uint256 endEpoch; // End epoch for terminated rails (0 for active rails)
+    // }
 
     // token => payee => array of railIds
     mapping(address => mapping(address => uint256[])) private payeeRails;
@@ -102,14 +145,22 @@ contract Payments is
         string note;
     }
 
+    // Events
+    event DepositWithPermit(
+        address indexed token,
+        address indexed account,
+        uint256 amount
+    );
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
     function initialize() public initializer {
-        __Ownable_init();
+        __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
+        __ReentrancyGuard_init();
         _nextRailId = 1;
     }
 
@@ -171,7 +222,7 @@ contract Payments is
         );
         _;
     }
-    // audit: avoid changing state in modifiers
+
     modifier settleAccountLockupBeforeAndAfter(
         address token,
         address owner,
@@ -257,20 +308,21 @@ contract Payments is
                 from: rail.from,
                 to: rail.to,
                 operator: rail.operator,
-                arbiter: rail.arbiter,
+                validator: rail.validator,
                 paymentRate: rail.paymentRate,
                 lockupPeriod: rail.lockupPeriod,
                 lockupFixed: rail.lockupFixed,
                 settledUpTo: rail.settledUpTo,
                 endEpoch: rail.endEpoch,
-                commissionRateBps: rail.commissionRateBps
+                commissionRateBps: rail.commissionRateBps,
+                serviceFeeRecipient: rail.serviceFeeRecipient
             });
     }
 
     /// @notice Updates the approval status and allowances for an operator on behalf of the message sender.
     /// @param token The ERC20 token address for which the approval is being set.
     /// @param operator The address of the operator whose approval is being modified.
-    /// @param approved Whether the operator is approved (true) or not (false) to create new rails>
+    /// @param approved Whether the operator is approved (true) or not (false) to create new rails.
     /// @param rateAllowance The maximum payment rate the operator can set across all rails created by the operator on behalf of the message sender. If this is less than the current payment rate, the operator will only be able to reduce rates until they fall below the target.
     /// @param lockupAllowance The maximum amount of funds the operator can lock up on behalf of the message sender towards future payments. If this exceeds the current total amount of funds locked towards future payments, the operator will only be able to reduce future lockup.
     /// @param maxLockupPeriod The maximum number of epochs (blocks) the operator can lock funds for. If this is less than the current lockup period for a rail, the operator will only be able to reduce the lockup period.
@@ -282,6 +334,24 @@ contract Payments is
         uint256 lockupAllowance,
         uint256 maxLockupPeriod
     ) external nonReentrant validateNonZeroAddress(operator, "operator") {
+        _setOperatorApproval(
+            token,
+            operator,
+            approved,
+            rateAllowance,
+            lockupAllowance,
+            maxLockupPeriod
+        );
+    }
+
+    function _setOperatorApproval(
+        address token,
+        address operator,
+        bool approved,
+        uint256 rateAllowance,
+        uint256 lockupAllowance,
+        uint256 maxLockupPeriod
+    ) internal {
         OperatorApproval storage approval = operatorApprovals[token][
             msg.sender
         ][operator];
@@ -373,6 +443,113 @@ contract Payments is
         account.funds += amount;
     }
 
+    /**
+     * @notice Deposits tokens using permit (EIP-2612) approval in a single transaction.
+     * @param token The ERC20 token address to deposit.
+     * @param to The address whose account will be credited (must be the permit signer).
+     * @param amount The amount of tokens to deposit.
+     * @param deadline Permit deadline (timestamp).
+     * @param v,r,s Permit signature.
+     */
+    function depositWithPermit(
+        address token,
+        address to,
+        uint256 amount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    )
+        external
+        nonReentrant
+        validateNonZeroAddress(to, "to")
+        settleAccountLockupBeforeAndAfter(token, to, false)
+    {
+        _depositWithPermit(token, to, amount, deadline, v, r, s);
+    }
+
+    function _depositWithPermit(
+        address token,
+        address to,
+        uint256 amount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) internal {
+        // Revert if token is address(0) as permit is not supported for native tokens
+        require(
+            token != address(0),
+            "depositWithPermit: native token not supported"
+        );
+
+        // Use 'to' as the owner in permit call (the address that signed the permit)
+        IERC20Permit(token).permit(
+            to,
+            address(this),
+            amount,
+            deadline,
+            v,
+            r,
+            s
+        );
+
+        Account storage account = accounts[token][to];
+        IERC20(token).safeTransferFrom(to, address(this), amount);
+        account.funds += amount;
+
+        emit DepositWithPermit(token, to, amount);
+    }
+
+    /**
+     * @notice Deposits tokens using permit (EIP-2612) approval in a single transaction,
+     *         while also setting operator approval.
+     * @param token The ERC20 token address to deposit and for which the operator approval is being set.
+     *             Note: The token must support EIP-2612 permit functionality.
+     * @param to The address whose account will be credited (must be the permit signer).
+     * @param amount The amount of tokens to deposit.
+     * @param deadline Permit deadline (timestamp).
+     * @param v,r,s Permit signature.
+     * @param operator The address of the operator whose approval is being modified.
+     * @param rateAllowance The maximum payment rate the operator can set across all rails created by the operator
+     *             on behalf of the message sender. If this is less than the current payment rate, the operator will
+     *             only be able to reduce rates until they fall below the target.
+     * @param lockupAllowance The maximum amount of funds the operator can lock up on behalf of the message sender
+     *             towards future payments. If this exceeds the current total amount of funds locked towards future payments,
+     *             the operator will only be able to reduce future lockup.
+     * @param maxLockupPeriod The maximum number of epochs (blocks) the operator can lock funds for. If this is less than
+     *             the current lockup period for a rail, the operator will only be able to reduce the lockup period.
+     */
+    function depositWithPermitAndApproveOperator(
+        address token,
+        address to,
+        uint256 amount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s,
+        address operator,
+        uint256 rateAllowance,
+        uint256 lockupAllowance,
+        uint256 maxLockupPeriod
+    )
+        external
+        nonReentrant
+        validateNonZeroAddress(operator, "operator")
+        validateNonZeroAddress(to, "to")
+        settleAccountLockupBeforeAndAfter(token, to, false)
+    {
+        _setOperatorApproval(
+            token,
+            operator,
+            true,
+            rateAllowance,
+            lockupAllowance,
+            maxLockupPeriod
+        );
+        _depositWithPermit(token, to, amount, deadline, v, r, s);
+    }
+
     /// @notice Withdraws tokens from the caller's account to the caller's account, up to the amount of currently available tokens (the tokens not currently locked in rails).
     /// @param token The ERC20 token address to withdraw.
     /// @param amount The amount of tokens to withdraw.
@@ -430,16 +607,18 @@ contract Payments is
     /// @param token The ERC20 token address for payments on this rail.
     /// @param from The client address (payer) for this rail.
     /// @param to The recipient address for payments on this rail.
-    /// @param arbiter Optional address of an arbiter contract (can be address(0) for no arbitration).
+    /// @param validator Optional address of an validator contract (can be address(0) for no validation).
     /// @param commissionRateBps Optional operator commission in basis points (0-10000).
+    /// @param serviceFeeRecipient Address to receive operator commission
     /// @return The ID of the newly created rail.
     /// @custom:constraint Caller must be approved as an operator by the client (from address).
     function createRail(
         address token,
         address from,
         address to,
-        address arbiter,
-        uint256 commissionRateBps
+        address validator,
+        uint256 commissionRateBps,
+        address serviceFeeRecipient
     )
         external
         nonReentrant
@@ -461,6 +640,11 @@ contract Payments is
             "commission rate exceeds maximum"
         );
 
+        require(
+            commissionRateBps == 0 || serviceFeeRecipient != address(0),
+            "non-zero commission requires service fee recipient"
+        );
+
         uint256 railId = _nextRailId++;
 
         Rail storage rail = rails[railId];
@@ -468,10 +652,11 @@ contract Payments is
         rail.from = from;
         rail.to = to;
         rail.operator = operator;
-        rail.arbiter = arbiter;
+        rail.validator = validator;
         rail.settledUpTo = block.number;
         rail.endEpoch = 0;
         rail.commissionRateBps = commissionRateBps;
+        rail.serviceFeeRecipient = serviceFeeRecipient;
 
         // Record this rail in the payee's and payer's lists
         payeeRails[token][to].push(railId);
@@ -631,12 +816,7 @@ contract Payments is
         // Validate rate changes based on rail state and account lockup
         if (isTerminated) {
             if (block.number >= maxSettlementEpochForTerminatedRail(rail)) {
-                return
-                    modifyPaymentForTerminatedRailBeyondLastEpoch(
-                        rail,
-                        newRate,
-                        oneTimePayment
-                    );
+                revert("cannot modify terminated rail beyond it's end epoch");
             }
 
             require(
@@ -712,30 +892,6 @@ contract Payments is
         processOneTimePayment(payer, payee, rail, oneTimePayment);
     }
 
-    function modifyPaymentForTerminatedRailBeyondLastEpoch(
-        Rail storage rail,
-        uint256 newRate,
-        uint256 oneTimePayment
-    ) internal {
-        uint256 endEpoch = maxSettlementEpochForTerminatedRail(rail);
-        require(
-            newRate == 0 && oneTimePayment == 0,
-            "for terminated rails beyond last settlement epoch, both new rate and one-time payment must be 0"
-        );
-
-        // Check if we need to record the current rate in the queue (should only do this once for the last epoch)
-        if (
-            rail.rateChangeQueue.isEmpty() ||
-            rail.rateChangeQueue.peekTail().untilEpoch < endEpoch
-        ) {
-            // Queue the current rate up to the max settlement epoch
-            rail.rateChangeQueue.enqueue(rail.paymentRate, endEpoch);
-        }
-
-        // Set payment rate to 0 as the rail is past its last settlement epoch
-        rail.paymentRate = 0;
-    }
-
     function enqueueRateChange(
         Rail storage rail,
         uint256 oldRate,
@@ -745,16 +901,19 @@ contract Payments is
         if (newRate == oldRate || rail.settledUpTo == block.number) {
             return;
         }
-        // if (oldRate == 0 && rail.rateChangeQueue.isEmpty()) {
-        //     rail.settledUpTo = block.number;
-        //     return;
-        // }
+
+        // Skip putting a 0-rate entry on an empty queue
+        if (oldRate == 0 && rail.rateChangeQueue.isEmpty()) {
+            rail.settledUpTo = block.number;
+            return;
+        }
+
         // Only queue the previous rate once per epoch
         if (
             rail.rateChangeQueue.isEmpty() ||
             rail.rateChangeQueue.peekTail().untilEpoch != block.number
         ) {
-            // For arbitrated rails, we need to enqueue the old rate.
+            // For validated rails, we need to enqueue the old rate.
             // This ensures that the old rate is applied up to and including the current block.
             // The new rate will be applicable starting from the next block.
             rail.rateChangeQueue.enqueue(oldRate, block.number);
@@ -764,7 +923,7 @@ contract Payments is
     function calculateAndPayFees(
         uint256 amount,
         address token,
-        address operator,
+        address serviceFeeRecipient,
         uint256 commissionRateBps
     )
         internal
@@ -796,8 +955,10 @@ contract Payments is
 
         // Credit operator (if commission exists)
         if (operatorCommission > 0) {
-            Account storage operatorAccount = accounts[token][operator];
-            operatorAccount.funds += operatorCommission;
+            Account storage serviceFeeRecipientAccount = accounts[token][
+                serviceFeeRecipient
+            ];
+            serviceFeeRecipientAccount.funds += operatorCommission;
         }
 
         // Track platform fee
@@ -831,7 +992,7 @@ contract Payments is
             (uint256 netPayeeAmount, , ) = calculateAndPayFees(
                 oneTimePayment,
                 rail.token,
-                rail.operator,
+                rail.serviceFeeRecipient,
                 rail.commissionRateBps
             );
 
@@ -840,7 +1001,7 @@ contract Payments is
         }
     }
 
-    /// @notice Settles payments for a terminated rail without arbitration. This may only be called by the payee and after the terminated rail's max settlement epoch has passed. It's an escape-hatch to unblock payments in an otherwise stuck rail (e.g., due to a buggy arbiter contract) and it always pays in full.
+    /// @notice Settles payments for a terminated rail without validation. This may only be called by the payee and after the terminated rail's max settlement epoch has passed. It's an escape-hatch to unblock payments in an otherwise stuck rail (e.g., due to a buggy validator contract) and it always pays in full.
     /// @param railId The ID of the rail to settle.
     /// @return totalSettledAmount The total amount settled and transferred.
     /// @return totalNetPayeeAmount The net amount credited to the payee after fees.
@@ -848,7 +1009,7 @@ contract Payments is
     /// @return totalOperatorCommission The commission credited to the operator.
     /// @return finalSettledEpoch The epoch up to which settlement was actually completed.
     /// @return note Additional information about the settlement.
-    function settleTerminatedRailWithoutArbitration(
+    function settleTerminatedRailWithoutValidation(
         uint256 railId
     )
         external
@@ -872,13 +1033,13 @@ contract Payments is
         );
         require(
             block.number > maxSettleEpoch,
-            "terminated rail can only be settled without arbitration after max settlement epoch"
+            "terminated rail can only be settled without validation after max settlement epoch"
         );
 
         return settleRailInternal(railId, maxSettleEpoch, true);
     }
 
-    /// @notice Settles payments for a rail up to the specified epoch. Settlement may fail to reach the target epoch if either the client lacks the funds to pay up to the current epoch or the arbiter refuses to settle the entire requested range.
+    /// @notice Settles payments for a rail up to the specified epoch. Settlement may fail to reach the target epoch if either the client lacks the funds to pay up to the current epoch or the validator refuses to settle the entire requested range.
     /// @param railId The ID of the rail to settle.
     /// @param untilEpoch The epoch up to which to settle (must not exceed current block number).
     /// @return totalSettledAmount The total amount settled and transferred.
@@ -886,7 +1047,7 @@ contract Payments is
     /// @return totalPaymentFee The fee retained by the payment contract.
     /// @return totalOperatorCommission The commission credited to the operator.
     /// @return finalSettledEpoch The epoch up to which settlement was actually completed.
-    /// @return note Additional information about the settlement (especially from arbitration).
+    /// @return note Additional information about the settlement (especially from validation).
     function settleRail(
         uint256 railId,
         uint256 untilEpoch
@@ -911,7 +1072,7 @@ contract Payments is
     function settleRailInternal(
         uint256 railId,
         uint256 untilEpoch,
-        bool skipArbitration
+        bool skipValidation
     )
         internal
         returns (
@@ -981,7 +1142,7 @@ contract Payments is
                     startEpoch,
                     maxSettlementEpoch,
                     rail.paymentRate,
-                    skipArbitration
+                    skipValidation
                 );
 
             require(rail.settledUpTo > startEpoch, "No progress in settlement");
@@ -1013,7 +1174,7 @@ contract Payments is
                     rail.paymentRate,
                     startEpoch,
                     maxSettlementEpoch,
-                    skipArbitration
+                    skipValidation
                 );
 
             return
@@ -1089,8 +1250,11 @@ contract Payments is
         OperatorApproval storage operatorApproval = operatorApprovals[
             rail.token
         ][rail.from][rail.operator];
+        // Calculate current (old) lockup.
+        uint256 oldLockup = rail.lockupFixed +
+            (rail.paymentRate * rail.lockupPeriod);
 
-        updateOperatorLockupUsage(operatorApproval, rail.lockupFixed, 0);
+        updateOperatorLockupUsage(operatorApproval, oldLockup, 0);
 
         // Zero out the rail to mark it as inactive
         _zeroOutRail(rail);
@@ -1101,7 +1265,7 @@ contract Payments is
         uint256 currentRate,
         uint256 startEpoch,
         uint256 targetEpoch,
-        bool skipArbitration
+        bool skipValidation
     )
         internal
         returns (
@@ -1150,29 +1314,29 @@ contract Payments is
                 continue;
             }
 
-            // Settle the current segment with potentially arbitrated outcomes
+            // Settle the current segment with potentially validated outcomes
             (
                 uint256 segmentSettledAmount,
                 uint256 segmentNetPayeeAmount,
                 uint256 segmentPaymentFee,
                 uint256 segmentOperatorCommission,
-                string memory arbitrationNote
+                string memory validationNote
             ) = _settleSegment(
                     railId,
                     state.processedEpoch,
                     segmentEndBoundary,
                     segmentRate,
-                    skipArbitration
+                    skipValidation
                 );
 
-            // If arbiter returned no progress, exit early without updating state
+            // If validator returned no progress, exit early without updating state
             if (rail.settledUpTo <= state.processedEpoch) {
                 return (
                     state.totalSettledAmount,
                     state.totalNetPayeeAmount,
                     state.totalPaymentFee,
                     state.totalOperatorCommission,
-                    arbitrationNote
+                    validationNote
                 );
             }
 
@@ -1182,20 +1346,20 @@ contract Payments is
             state.totalPaymentFee += segmentPaymentFee;
             state.totalOperatorCommission += segmentOperatorCommission;
 
-            // If arbiter partially settled the segment, exit early
+            // If validator partially settled the segment, exit early
             if (rail.settledUpTo < segmentEndBoundary) {
                 return (
                     state.totalSettledAmount,
                     state.totalNetPayeeAmount,
                     state.totalPaymentFee,
                     state.totalOperatorCommission,
-                    arbitrationNote
+                    validationNote
                 );
             }
 
             // Successfully settled full segment, update tracking values
             state.processedEpoch = rail.settledUpTo;
-            state.note = arbitrationNote;
+            state.note = validationNote;
 
             // Remove the processed rate change from the queue
             if (!rateQueue.isEmpty()) {
@@ -1244,7 +1408,7 @@ contract Payments is
         uint256 epochStart,
         uint256 epochEnd,
         uint256 rate,
-        bool skipArbitration
+        bool skipValidation
     )
         internal
         returns (
@@ -1264,43 +1428,44 @@ contract Payments is
             return (0, 0, 0, 0, "Zero rate payment rail");
         }
 
-        // Calculate the default settlement values (without arbitration)
+        // Calculate the default settlement values (without validation)
         uint256 duration = epochEnd - epochStart;
         uint256 settledAmount = rate * duration;
         uint256 settledUntilEpoch = epochEnd;
         note = "";
 
-        // If this rail has an arbiter and we're not skipping arbitration, let it decide on the final settlement amount
-        if (rail.arbiter != address(0) && !skipArbitration) {
-            IArbiter arbiter = IArbiter(rail.arbiter);
-            IArbiter.ArbitrationResult memory result = arbiter.arbitratePayment(
-                railId,
-                settledAmount,
-                epochStart,
-                epochEnd,
-                rate
-            );
+        // If this rail has an validator and we're not skipping validation, let it decide on the final settlement amount
+        if (rail.validator != address(0) && !skipValidation) {
+            IValidator validator = IValidator(rail.validator);
+            IValidator.ValidationResult memory result = validator
+                .validatePayment(
+                    railId,
+                    settledAmount,
+                    epochStart,
+                    epochEnd,
+                    rate
+                );
 
-            // Ensure arbiter doesn't settle beyond our segment's end boundary
+            // Ensure validator doesn't settle beyond our segment's end boundary
             require(
                 result.settleUpto <= epochEnd,
-                "arbiter settled beyond segment end"
+                "validator settled beyond segment end"
             );
             require(
                 result.settleUpto >= epochStart,
-                "arbiter settled before segment start"
+                "validator settled before segment start"
             );
 
             settledUntilEpoch = result.settleUpto;
             settledAmount = result.modifiedAmount;
             note = result.note;
 
-            // Ensure arbiter doesn't allow more payment than the maximum possible
+            // Ensure validator doesn't allow more payment than the maximum possible
             // for the epochs they're confirming
             uint256 maxAllowedAmount = rate * (settledUntilEpoch - epochStart);
             require(
                 result.modifiedAmount <= maxAllowedAmount,
-                "arbiter modified amount exceeds maximum for settled duration"
+                "validator modified amount exceeds maximum for settled duration"
             );
         }
 
@@ -1315,6 +1480,8 @@ contract Payments is
             payer.lockupCurrent >= settledAmount,
             "failed to settle: insufficient lockup to cover settlement"
         );
+        uint256 actualSettledDuration = settledUntilEpoch - epochStart;
+        uint256 requiredLockup = rate * actualSettledDuration;
 
         // Transfer funds from payer (always pays full settled amount)
         payer.funds -= settledAmount;
@@ -1323,15 +1490,17 @@ contract Payments is
         (netPayeeAmount, paymentFee, operatorCommission) = calculateAndPayFees(
             settledAmount,
             rail.token,
-            rail.operator,
+            rail.serviceFeeRecipient,
             rail.commissionRateBps
         );
 
         // Credit payee
         payee.funds += netPayeeAmount;
 
-        // Reduce the lockup by the total settled amount
-        payer.lockupCurrent -= settledAmount;
+        // Reduce lockup based on actual settled duration, not requested duration
+        // so that if the validator only settles for a partial duration, we only reduce the client lockup by the actual locked amount
+        // for that reduced duration.
+        payer.lockupCurrent -= requiredLockup;
 
         // Update the rail's settled epoch
         rail.settledUpTo = settledUntilEpoch;
@@ -1382,7 +1551,7 @@ contract Payments is
             account.lockupLastSettledAt = currentEpoch;
             return currentEpoch;
         }
-        // audit: keep check at function entry
+
         require(
             account.funds >= account.lockupCurrent,
             "failed to settle: invariant violation: insufficient funds to cover lockup"
@@ -1446,7 +1615,7 @@ contract Payments is
         rail.from = address(0); // This now marks the rail as inactive
         rail.to = address(0);
         rail.operator = address(0);
-        rail.arbiter = address(0);
+        rail.validator = address(0);
         rail.paymentRate = 0;
         rail.lockupFixed = 0;
         rail.lockupPeriod = 0;
@@ -1527,7 +1696,12 @@ contract Payments is
         accumulatedFees[token] = currentFees - amount;
 
         // Perform the transfer
-        IERC20(token).safeTransfer(to, amount);
+        if (token == address(0)) {
+            (bool success, ) = payable(to).call{value: amount}("");
+            require(success, "FIL transfer failed");
+        } else {
+            IERC20(token).safeTransfer(to, amount);
+        }
     }
 
     /// @notice Returns information about all accumulated fees
@@ -1631,12 +1805,61 @@ contract Payments is
         return result;
     }
 
-    function getAccountUnlockedFunds(
-        address token,
-        address account
+    /// @notice Number of pending rate-change entries for a rail
+    function getRateChangeQueueSize(
+        uint256 railId
     ) external view returns (uint256) {
-        Account memory accountInfo = accounts[token][account];
-        return accountInfo.funds - accountInfo.lockupCurrent;
+        return rails[railId].rateChangeQueue.size();
+    }
+
+    /**
+     * @notice Gets information about an account - when it would go into debt, total balance, available balance, and lockup rate.
+     * @param token The token address to get account info for.
+     * @param owner The address of the account owner.
+     * @return fundedUntilEpoch The epoch at which the account would go into debt given current lockup rate and balance.
+     * @return currentFunds The current funds in the account.
+     * @return availableFunds The funds available after accounting for simulated lockup.
+     * @return currentLockupRate The current lockup rate per epoch.
+     */
+    function getAccountInfoIfSettled(
+        address token,
+        address owner
+    )
+        external
+        view
+        returns (
+            uint256 fundedUntilEpoch,
+            uint256 currentFunds,
+            uint256 availableFunds,
+            uint256 currentLockupRate
+        )
+    {
+        Account storage account = accounts[token][owner];
+
+        currentFunds = account.funds;
+        currentLockupRate = account.lockupRate;
+
+        uint256 currentEpoch = block.number;
+
+        fundedUntilEpoch = account.lockupRate == 0
+            ? type(uint256).max
+            : account.lockupLastSettledAt +
+                (account.funds - account.lockupCurrent) /
+                account.lockupRate;
+        uint256 simulatedSettledAt = fundedUntilEpoch >= currentEpoch
+            ? currentEpoch
+            : fundedUntilEpoch;
+        uint256 simulatedLockupCurrent = account.lockupCurrent +
+            account.lockupRate *
+            (simulatedSettledAt - account.lockupLastSettledAt);
+        availableFunds = account.funds - simulatedLockupCurrent;
+
+        return (
+            fundedUntilEpoch,
+            currentFunds,
+            availableFunds,
+            currentLockupRate
+        );
     }
 }
 
