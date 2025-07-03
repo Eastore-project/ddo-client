@@ -13,12 +13,10 @@ import (
 // GetAllocationRailInfo gets allocation and rail information together
 func (c *Client) GetAllocationRailInfo(allocationId uint64) (uint64, uint64, *types.RailView, error) {
 	var results []interface{}
-	fmt.Printf("DEBUG: getAllocationRailInfo allocationId: %d\n", allocationId)
 	err := c.contract.Call(&bind.CallOpts{}, &results, "getAllocationRailInfo", allocationId)
 	if err != nil {
 		return 0, 0, nil, fmt.Errorf("failed to call getAllocationRailInfo: %w", err)
 	}
-	fmt.Printf("DEBUG: getAllocationRailInfo results: %v\n", results)
 
 	if len(results) < 3 {
 		return 0, 0, nil, fmt.Errorf("unexpected number of results from getAllocationRailInfo")

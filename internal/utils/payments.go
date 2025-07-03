@@ -33,15 +33,204 @@ type StorageCostResult struct {
 	TotalEpochs         int64    `json:"totalEpochs"`
 }
 
-// PaymentSetupResult contains the result of payment setup operations
-type PaymentSetupResult struct {
-	TotalStorageCost    *big.Int `json:"totalStorageCost"`
-	OneMonthAllowance   *big.Int `json:"oneMonthAllowance"`
-	RequiredDeposit     *big.Int `json:"requiredDeposit"`
-	TokenAddress        string   `json:"tokenAddress"`
-	TokenAllowanceTx    string   `json:"tokenAllowanceTx,omitempty"`
-	DepositTxHash       string   `json:"depositTxHash,omitempty"`
-	OperatorApprovalTx  string   `json:"operatorApprovalTx,omitempty"`
+// CheckAndSetupPayments handles the complete payment setup process
+func CheckAndSetupPayments(
+	ethClient *ethclient.Client,
+	ddoClient *ddo.Client,
+	paymentsClient *payments.Client,
+	pieceInfos []types.PieceInfo,
+	userAddress common.Address,
+	contractAddress common.Address,
+) error {
+	
+	// Calculate total storage costs
+	costResult, err := CalculateStorageCosts(ddoClient, pieceInfos)
+	if err != nil {
+		return fmt.Errorf("failed to calculate storage costs: %w", err)
+	}
+
+	    // Assume all pieces use the same token (we could enhance this later for multi-token support)
+    if len(pieceInfos) == 0 {
+        return fmt.Errorf("no pieces provided")
+    }
+    tokenAddress := pieceInfos[0].PaymentTokenAddress
+
+	// Calculate one month allowance (for operator approval lockup allowance)
+	// This is: total_bytes * price_per_byte_per_epoch * epochs_per_month
+	oneMonthCost := new(big.Int).Mul(
+		new(big.Int).SetUint64(costResult.TotalBytes),
+		costResult.PricePerBytePerEpoch,
+	)
+	oneMonthCost.Mul(oneMonthCost, big.NewInt(EPOCHS_PER_MONTH))
+
+	// Required deposit is the total storage cost
+	requiredDeposit := new(big.Int).Mul(costResult.TotalCost, big.NewInt(2))
+
+	fmt.Printf("💰 Payment Setup Summary:\n")
+	fmt.Printf("   Token: %s\n", tokenAddress.Hex())
+	fmt.Printf("   Total Storage Cost: %s\n", costResult.TotalCost.String())
+	fmt.Printf("   One Month Allowance: %s\n", oneMonthCost.String())
+	fmt.Printf("   Required Deposit: %s\n", requiredDeposit.String())
+	fmt.Println()
+
+	// Check current account balance in payments contract
+	account, err := paymentsClient.GetAccount(tokenAddress, userAddress)
+	if err != nil {
+		return fmt.Errorf("failed to get account info: %w", err)
+	}
+
+	fmt.Printf("📊 Current Account Status:\n")
+	fmt.Printf("   Funds: %s\n", account.Funds.String())
+	fmt.Printf("   Lockup Current: %s\n", account.LockupCurrent.String())
+	fmt.Printf("   Available: %s\n", new(big.Int).Sub(account.Funds, account.LockupCurrent).String())
+	fmt.Println()
+
+	// Check if user needs to deposit more funds
+	available := new(big.Int).Sub(account.Funds, account.LockupCurrent)
+	if available.Cmp(requiredDeposit) < 0 {
+		deficit := new(big.Int).Sub(requiredDeposit, available)
+		fmt.Printf("⚠️  Insufficient funds. Need to deposit: %s\n", deficit.String())
+		
+		// For ERC20 tokens, check and approve allowance before depositing
+		if tokenAddress != common.HexToAddress("0x0") {
+			fmt.Printf("🔍 Checking ERC20 token allowance...\n")
+			
+			// Create ERC20 client
+			erc20Client, err := token.NewERC20Client(tokenAddress.Hex())
+			if err != nil {
+				return fmt.Errorf("failed to create ERC20 client: %w", err)
+			}
+			defer erc20Client.Close()
+
+			// Check user's token balance
+			tokenBalance, err := erc20Client.GetBalance(userAddress)
+			if err != nil {
+				return fmt.Errorf("failed to get token balance: %w", err)
+			}
+
+			if tokenBalance.Cmp(deficit) < 0 {
+				return fmt.Errorf("insufficient token balance: have %s, need %s", tokenBalance.String(), deficit.String())
+			}
+
+			// Check and approve allowance if needed
+			allowanceTx, approved, err := erc20Client.CheckAndApprove(userAddress, paymentsClient.GetContractAddress(), deficit)
+			if err != nil {
+				return fmt.Errorf("failed to check/approve token allowance: %w", err)
+			}
+
+			if approved {
+				fmt.Printf("✅ Token allowance approved: %s\n", allowanceTx)
+				
+				// Wait for approval transaction to be mined before depositing
+				fmt.Printf("⏳ Waiting for allowance transaction to be mined...\n")
+				if err := WaitForTransaction(ethClient, allowanceTx); err != nil {
+					fmt.Printf("⚠️  Warning: allowance transaction may not have been mined: %v\n", err)
+				}
+			} else {
+				fmt.Printf("✅ Token allowance already sufficient\n")
+			}
+		}
+
+		// Deposit the required amount
+		fmt.Printf("💸 Depositing %s tokens...\n", deficit.String())
+		txHash, err := paymentsClient.Deposit(tokenAddress, userAddress, deficit)
+		if err != nil {
+			return fmt.Errorf("failed to deposit tokens: %w", err)
+		}
+		fmt.Printf("✅ Deposit transaction sent: %s\n", txHash)
+		fmt.Printf("⏳ Waiting for deposit transaction to be mined...\n")
+		if err := WaitForTransaction(ethClient, txHash); err != nil {
+			fmt.Printf("⚠️  Warning: deposit transaction may not have been mined: %v\n", err)
+		}
+	}
+
+	// Check operator approval for DDO contract
+	operatorApproval, err := paymentsClient.GetOperatorApproval(tokenAddress, userAddress, contractAddress)
+	if err != nil {
+		return fmt.Errorf("failed to get operator approval: %w", err)
+	}
+
+	fmt.Printf("🔐 Operator Approval Status:\n")
+	fmt.Printf("   Is Approved: %t\n", operatorApproval.IsApproved)
+	fmt.Printf("   Rate Allowance: %s\n", operatorApproval.RateAllowance.String())
+	fmt.Printf("   Lockup Allowance: %s\n", operatorApproval.LockupAllowance.String())
+	fmt.Printf("   Rate Usage: %s\n", operatorApproval.RateUsage.String())
+	fmt.Printf("   Lockup Usage: %s\n", operatorApproval.LockupUsage.String())
+	fmt.Println()
+		
+	// Set rate allowance to a large number for flexibility
+	rateAllowance := new(big.Int).Mul(costResult.PricePerBytePerEpoch, new(big.Int).SetUint64(costResult.TotalBytes))
+	// actual cost is 2x one month cost even though we lock just for one month as we unlock fund after one time payment which require 2x allowance to go through
+	// as funds are not unlocked before that operation
+	lockupAllowance := new(big.Int).Mul(oneMonthCost, big.NewInt(2))
+		var txHash string
+		if !operatorApproval.IsApproved || (new(big.Int).Sub(operatorApproval.RateAllowance, operatorApproval.RateUsage).Cmp(rateAllowance) < 0 && new(big.Int).Sub(operatorApproval.LockupAllowance, operatorApproval.LockupUsage).Cmp(lockupAllowance) < 0) {
+			fmt.Printf("🔧 Setting operator approval...\n")
+			txHash, err = paymentsClient.SetOperatorApproval(
+				tokenAddress,
+				contractAddress, // operator (DDO contract)
+				true,           // approved
+				new(big.Int).Add(operatorApproval.RateAllowance, rateAllowance),  // rate allowance
+				new(big.Int).Add(operatorApproval.LockupAllowance, lockupAllowance),   // lockup allowance (one month of payments)
+				big.NewInt(EPOCHS_PER_MONTH), // max lockup period (1 month)
+			) 
+			} else if new(big.Int).Sub(operatorApproval.RateAllowance, operatorApproval.RateUsage).Cmp(rateAllowance) < 0 {
+				fmt.Printf("🔧 Updating operator approval...\n")
+				txHash, err = paymentsClient.SetOperatorApproval(
+					tokenAddress,
+					contractAddress, // operator (DDO contract)
+					true,           // approved
+					new(big.Int).Add(operatorApproval.RateAllowance, rateAllowance),  // rate allowance
+					operatorApproval.LockupAllowance,   // lockup allowance same
+					big.NewInt(EPOCHS_PER_MONTH), // max lockup period (1 month)
+				)
+			} else if new(big.Int).Sub(operatorApproval.LockupAllowance, operatorApproval.LockupUsage).Cmp(lockupAllowance) < 0 {
+				fmt.Printf("🔧 Updating operator approval...\n")
+				txHash, err = paymentsClient.SetOperatorApproval(
+					tokenAddress,
+					contractAddress, // operator (DDO contract)
+					true,           // approved
+					new(big.Int).Add(operatorApproval.RateAllowance, rateAllowance),  // rate allowance
+					new(big.Int).Add(operatorApproval.LockupAllowance, lockupAllowance),   // lockup allowance (one month of payments)
+					big.NewInt(EPOCHS_PER_MONTH), // max lockup period (1 month)
+				)
+			} else {
+				fmt.Printf("✅ Operator approval already sufficient\n")
+			}
+
+		if err != nil {
+			return fmt.Errorf("failed to set operator approval: %w", err)
+		}
+		
+		if txHash != "" {
+			fmt.Printf("⏳ Waiting for operator approval transaction to be mined...\n")
+			if err := WaitForTransaction(ethClient, txHash); err != nil {
+				fmt.Printf("⚠️  Warning: operator approval transaction may not have been mined: %v\n", err)
+			}
+			fmt.Printf("✅ Operator approval transaction sent: %s\n", txHash)
+		}
+
+	return nil
+}
+
+// PromptUserConfirmation prompts the user to confirm payment setup
+func PromptUserConfirmation(totalStorageCost, requiredDeposit, oneMonthAllowance *big.Int, tokenAddress string) error {
+	fmt.Printf("\n🎯 Payment Setup Required:\n")
+	fmt.Printf("   Token: %s\n", tokenAddress)
+	fmt.Printf("   Total Storage Cost: %s\n", totalStorageCost.String())
+	fmt.Printf("   Required Deposit: %s\n", requiredDeposit.String())
+	fmt.Printf("   Operator Allowance: %s\n", oneMonthAllowance.String())
+	fmt.Println()
+	
+	fmt.Printf("⚠️  Before proceeding:\n")
+	fmt.Printf("1. Ensure you have enough tokens in your wallet\n")
+	fmt.Printf("2. Approve the payments contract to spend your tokens (if using ERC20)\n")
+	fmt.Printf("3. The system will deposit tokens and set operator approvals\n")
+	fmt.Println()
+	
+	// In a real CLI, you might want to add actual user confirmation prompt
+	// For now, we'll assume confirmation
+	return nil
 }
 
 // CalculateStorageCosts calculates the total storage costs for multiple pieces
@@ -99,207 +288,6 @@ func CalculateStorageCosts(ddoClient *ddo.Client, pieceInfos []types.PieceInfo) 
 		TotalBytes:          totalBytes,
 		TotalEpochs:         totalEpochs,
 	}, nil
-}
-
-// CheckAndSetupPayments handles the complete payment setup process
-func CheckAndSetupPayments(
-	ethClient *ethclient.Client,
-	ddoClient *ddo.Client,
-	paymentsClient *payments.Client,
-	pieceInfos []types.PieceInfo,
-	userAddress common.Address,
-	contractAddress common.Address,
-) (*PaymentSetupResult, error) {
-	
-	// Calculate total storage costs
-	costResult, err := CalculateStorageCosts(ddoClient, pieceInfos)
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate storage costs: %w", err)
-	}
-
-	    // Assume all pieces use the same token (we could enhance this later for multi-token support)
-    if len(pieceInfos) == 0 {
-        return nil, fmt.Errorf("no pieces provided")
-    }
-    tokenAddress := pieceInfos[0].PaymentTokenAddress
-
-	// Calculate one month allowance (for operator approval lockup allowance)
-	// This is: total_bytes * price_per_byte_per_epoch * epochs_per_month
-	oneMonthCost := new(big.Int).Mul(
-		new(big.Int).SetUint64(costResult.TotalBytes),
-		costResult.PricePerBytePerEpoch,
-	)
-	oneMonthCost.Mul(oneMonthCost, big.NewInt(EPOCHS_PER_MONTH))
-
-	// Required deposit is the total storage cost
-	requiredDeposit := new(big.Int).Mul(costResult.TotalCost, big.NewInt(2))
-
-	fmt.Printf("💰 Payment Setup Summary:\n")
-	fmt.Printf("   Token: %s\n", tokenAddress.Hex())
-	fmt.Printf("   Total Storage Cost: %s\n", costResult.TotalCost.String())
-	fmt.Printf("   One Month Allowance: %s\n", oneMonthCost.String())
-	fmt.Printf("   Required Deposit: %s\n", requiredDeposit.String())
-	fmt.Println()
-
-	result := &PaymentSetupResult{
-		TotalStorageCost:  costResult.TotalCost,
-		OneMonthAllowance: oneMonthCost,
-		RequiredDeposit:   requiredDeposit,
-		TokenAddress:      tokenAddress.Hex(),
-	}
-
-	// Check current account balance in payments contract
-	fmt.Println(tokenAddress.Hex())
-	account, err := paymentsClient.GetAccount(tokenAddress, userAddress)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get account info: %w", err)
-	}
-
-	fmt.Printf("📊 Current Account Status:\n")
-	fmt.Printf("   Funds: %s\n", account.Funds.String())
-	fmt.Printf("   Lockup Current: %s\n", account.LockupCurrent.String())
-	fmt.Printf("   Available: %s\n", new(big.Int).Sub(account.Funds, account.LockupCurrent).String())
-	fmt.Println()
-
-	// Check if user needs to deposit more funds
-	available := new(big.Int).Sub(account.Funds, account.LockupCurrent)
-	if available.Cmp(requiredDeposit) < 0 {
-		deficit := new(big.Int).Sub(requiredDeposit, available)
-		fmt.Printf("⚠️  Insufficient funds. Need to deposit: %s\n", deficit.String())
-		
-		// For ERC20 tokens, check and approve allowance before depositing
-		if tokenAddress != common.HexToAddress("0x0") {
-			fmt.Printf("🔍 Checking ERC20 token allowance...\n")
-			
-			// Create ERC20 client
-			erc20Client, err := token.NewERC20Client(tokenAddress.Hex())
-			if err != nil {
-				return nil, fmt.Errorf("failed to create ERC20 client: %w", err)
-			}
-			defer erc20Client.Close()
-
-			// Check user's token balance
-			tokenBalance, err := erc20Client.GetBalance(userAddress)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get token balance: %w", err)
-			}
-
-			if tokenBalance.Cmp(deficit) < 0 {
-				return nil, fmt.Errorf("insufficient token balance: have %s, need %s", tokenBalance.String(), deficit.String())
-			}
-
-			// Check and approve allowance if needed
-			allowanceTx, approved, err := erc20Client.CheckAndApprove(userAddress, paymentsClient.GetContractAddress(), deficit)
-			if err != nil {
-				return nil, fmt.Errorf("failed to check/approve token allowance: %w", err)
-			}
-
-			if approved {
-				fmt.Printf("✅ Token allowance approved: %s\n", allowanceTx)
-				result.TokenAllowanceTx = allowanceTx
-				
-				// Wait for approval transaction to be mined before depositing
-				fmt.Printf("⏳ Waiting for allowance transaction to be mined...\n")
-				if err := WaitForTransaction(ethClient, allowanceTx); err != nil {
-					fmt.Printf("⚠️  Warning: allowance transaction may not have been mined: %v\n", err)
-				}
-			} else {
-				fmt.Printf("✅ Token allowance already sufficient\n")
-			}
-		}
-
-		// Deposit the required amount
-		fmt.Printf("💸 Depositing %s tokens...\n", deficit.String())
-		txHash, err := paymentsClient.Deposit(tokenAddress, userAddress, deficit)
-		if err != nil {
-			return nil, fmt.Errorf("failed to deposit tokens: %w", err)
-		}
-		result.DepositTxHash = txHash
-		fmt.Printf("✅ Deposit transaction sent: %s\n", txHash)
-	}
-
-	// Check operator approval for DDO contract
-	operatorApproval, err := paymentsClient.GetOperatorApproval(tokenAddress, userAddress, contractAddress)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get operator approval: %w", err)
-	}
-
-	fmt.Printf("🔐 Operator Approval Status:\n")
-	fmt.Printf("   Is Approved: %t\n", operatorApproval.IsApproved)
-	fmt.Printf("   Rate Allowance: %s\n", operatorApproval.RateAllowance.String())
-	fmt.Printf("   Lockup Allowance: %s\n", operatorApproval.LockupAllowance.String())
-	fmt.Printf("   Rate Usage: %s\n", operatorApproval.RateUsage.String())
-	fmt.Printf("   Lockup Usage: %s\n", operatorApproval.LockupUsage.String())
-	fmt.Println()
-		
-	// Set rate allowance to a large number for flexibility
-	rateAllowance := new(big.Int).Mul(costResult.PricePerBytePerEpoch, new(big.Int).SetUint64(costResult.TotalBytes))
-	// actual cost is 2x one month cost even though we lock just for one month as we unlock fund after one time payment which require 2x allowance to go through
-	// as funds are not unlocked before that operation
-	lockupAllowance := new(big.Int).Mul(oneMonthCost, big.NewInt(2))
-		var txHash string
-		if !operatorApproval.IsApproved || (new(big.Int).Sub(operatorApproval.RateAllowance, operatorApproval.RateUsage).Cmp(rateAllowance) < 0 && new(big.Int).Sub(operatorApproval.LockupAllowance, operatorApproval.LockupUsage).Cmp(lockupAllowance) < 0) {
-			fmt.Printf("🔧 Setting operator approval...\n")
-			txHash, err = paymentsClient.SetOperatorApproval(
-				tokenAddress,
-				contractAddress, // operator (DDO contract)
-				true,           // approved
-				new(big.Int).Add(operatorApproval.RateAllowance, rateAllowance),  // rate allowance
-				new(big.Int).Add(operatorApproval.LockupAllowance, lockupAllowance),   // lockup allowance (one month of payments)
-				big.NewInt(EPOCHS_PER_MONTH), // max lockup period (1 month)
-			) 
-			} else if new(big.Int).Sub(operatorApproval.RateAllowance, operatorApproval.RateUsage).Cmp(rateAllowance) < 0 {
-				fmt.Printf("🔧 Updating operator approval...\n")
-				txHash, err = paymentsClient.SetOperatorApproval(
-					tokenAddress,
-					contractAddress, // operator (DDO contract)
-					true,           // approved
-					new(big.Int).Add(operatorApproval.RateAllowance, rateAllowance),  // rate allowance
-					operatorApproval.LockupAllowance,   // lockup allowance same
-					big.NewInt(EPOCHS_PER_MONTH), // max lockup period (1 month)
-				)
-			} else if new(big.Int).Sub(operatorApproval.LockupAllowance, operatorApproval.LockupUsage).Cmp(lockupAllowance) < 0 {
-				fmt.Printf("🔧 Updating operator approval...\n")
-				txHash, err = paymentsClient.SetOperatorApproval(
-					tokenAddress,
-					contractAddress, // operator (DDO contract)
-					true,           // approved
-					new(big.Int).Add(operatorApproval.RateAllowance, rateAllowance),  // rate allowance
-					new(big.Int).Add(operatorApproval.LockupAllowance, lockupAllowance),   // lockup allowance (one month of payments)
-					big.NewInt(EPOCHS_PER_MONTH), // max lockup period (1 month)
-				)
-			} else {
-				fmt.Printf("✅ Operator approval already sufficient\n")
-			}
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to set operator approval: %w", err)
-		}
-		result.OperatorApprovalTx = txHash
-		fmt.Printf("✅ Operator approval transaction sent: %s\n", txHash)
-	
-
-	return result, nil
-}
-
-// PromptUserConfirmation prompts the user to confirm payment setup
-func PromptUserConfirmation(result *PaymentSetupResult) error {
-	fmt.Printf("\n🎯 Payment Setup Required:\n")
-	fmt.Printf("   Token: %s\n", result.TokenAddress)
-	fmt.Printf("   Total Storage Cost: %s\n", result.TotalStorageCost.String())
-	fmt.Printf("   Required Deposit: %s\n", result.RequiredDeposit.String())
-	fmt.Printf("   Operator Allowance: %s\n", result.OneMonthAllowance.String())
-	fmt.Println()
-	
-	fmt.Printf("⚠️  Before proceeding:\n")
-	fmt.Printf("1. Ensure you have enough tokens in your wallet\n")
-	fmt.Printf("2. Approve the payments contract to spend your tokens (if using ERC20)\n")
-	fmt.Printf("3. The system will deposit tokens and set operator approvals\n")
-	fmt.Println()
-	
-	// In a real CLI, you might want to add actual user confirmation prompt
-	// For now, we'll assume confirmation
-	return nil
 }
 
 // WaitForTransaction waits for a transaction to be mined

@@ -175,7 +175,6 @@ func (c *Client) GetClaimInfoForClient(clientAddress string, claimId uint64) ([]
 	if err != nil {
 		return nil, fmt.Errorf("failed to call contract: %w", err)
 	}
-	fmt.Println("DEBUG: result", result)
 	if len(result) == 0 {
 		return []types.Claim{}, nil
 	}

@@ -21,9 +21,11 @@ DDO (Decentralized Data Orchestration) Client provides a streamlined approach to
 This repository contains two main components:
 
 ### 1. Smart Contracts (`contracts/`)
+
 Smart contracts implementing the DDO protocol with customizable deal logic, payment processing, and SLA enforcement. **Built with Foundry framework.**
 
 ### 2. CLI Tool (`internal/`)
+
 Command-line interface for interacting with DDO contracts. **Full documentation available in [CLI_USAGE.md](CLI_USAGE.md)**.
 
 ```
@@ -48,20 +50,21 @@ Command-line interface for interacting with DDO contracts. **Full documentation 
 
 ### Filecoin Calibration Testnet
 
-| Contract | Address | Description |
-|----------|---------|-------------|
-| **DDO Contract** | `0x5638917113653Ebe0B8dC0A874037088e9e297FA` | Main data onboarding contract |
+| Contract              | Address                                      | Description                       |
+| --------------------- | -------------------------------------------- | --------------------------------- |
+| **DDO Contract**      | `0x5638917113653Ebe0B8dC0A874037088e9e297FA` | Main data onboarding contract     |
 | **Payments Contract** | `0x549a0cE5c649fF9c284f03F479e41E1Ed881F637` | Payment processing and settlement |
 
 ### Supported Tokens
 
-| Token | Symbol | Address | Description |
-|-------|--------|---------|-------------|
+| Token                      | Symbol  | Address                                      | Description                    |
+| -------------------------- | ------- | -------------------------------------------- | ------------------------------ |
 | **USD Coin (Calibration)** | `USDFC` | `0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0` | Calibration testnet stablecoin |
 
 ## Quick Start
 
 ### 1. Build the CLI
+
 ```bash
 # Download dependencies
 go mod tidy
@@ -71,6 +74,7 @@ go build -o ddo cmd/cli/main.go
 ```
 
 ### 2. Configure Environment
+
 ```bash
 # Required configuration
 export DDO_CONTRACT_ADDRESS="0x1234567890abcdef1234567890abcdef12345678"
@@ -84,11 +88,13 @@ export PRIVATE_KEY="your_private_key_without_0x_prefix"
 ### 3. Basic Usage Examples
 
 **Query storage providers:**
+
 ```bash
 ./ddo sp query --actor-id 17840
 ```
 
 **Create data allocation:**
+
 ```bash
 ./ddo allocations create-from-file \
   --input ./my-data.txt \
@@ -99,6 +105,7 @@ export PRIVATE_KEY="your_private_key_without_0x_prefix"
 ```
 
 **Check allocation status:**
+
 ```bash
 ./ddo allocations query --client-address 0xYourAddress
 ```
@@ -228,11 +235,13 @@ chmod +x ddo
 You'll need both testnet FIL for gas fees and USDFC for storage payments:
 
 **Get Testnet FIL:**
+
 - Visit the [Filecoin Calibration Faucet](https://faucet.calibnet.chainsafe-fil.io/)
 - Request testnet FIL tokens for your wallet address
 - These tokens are used for transaction gas fees
 
 **Get USDFC Tokens:**
+
 - Visit the [USDFC Faucet](https://forest-explorer.chainsafe.dev/faucet/calibnet_usdfc)
 - Request USDFC tokens for storage payments
 - USDFC is the supported stablecoin for storage deals
@@ -298,6 +307,7 @@ This one-time approval allows the payments contract to handle USDFC transfers fo
 #### Step 3: Create Data Allocation
 
 Now create your data allocation using the `create-from-file` command. This command will:
+
 - Prepare your data (create CAR files, calculate piece CIDs)
 - Upload data to the buffer service (Lighthouse)
 - Create the allocation request on-chain
@@ -308,7 +318,7 @@ Now create your data allocation using the `create-from-file` command. This comma
   --rpc $RPC_URL \
   --contract $DDO_CONTRACT_ADDRESS \
   --payments-contract $PAYMENTS_CONTRACT_ADDRESS \
-  --buffer-service lighthouse \
+  --buffer-type lighthouse \
   --buffer-api-key $LIGHTHOUSE_API_KEY \
   --buffer-url $BUFFER_URL \
   --provider 17840 \
@@ -320,6 +330,7 @@ Now create your data allocation using the `create-from-file` command. This comma
 ```
 
 **Alternative short form command:**
+
 ```bash
 ./ddo allocations cff \
   -r $RPC_URL \
@@ -334,6 +345,7 @@ Now create your data allocation using the `create-from-file` command. This comma
 ```
 
 **Expected Output:**
+
 ```
 🔍 Data Preparation Starting...
 📁 Processing file: /path/to/your/file
@@ -367,6 +379,7 @@ Verify your allocation was created successfully:
 ```
 
 **Expected Output:**
+
 ```
 Contract: 0x5638917113653Ebe0B8dC0A874037088e9e297FA
 RPC: https://api.calibration.node.glif.io/rpc/v1
@@ -419,6 +432,7 @@ Anyone can trigger payment settlement for active deals. This transfers earned pa
 ```
 
 **Example Output:**
+
 ```
 🔄 Settlement Process Starting...
 📊 Calculating payments for allocation 65869
@@ -443,12 +457,13 @@ The storage provider can withdraw their earned payments using their registered p
 ```
 
 **Expected Output:**
+
 ```
 💸 Withdrawal Process:
    Token: 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0 (USDFC)
    Amount: 0.15 USDC
    To Address: 0xFe643b54727d53C49835f9f6c1a2B9861E741d98
-   
+
 ✅ Withdrawal successful!
    Transaction: 0x789abc...
 ```

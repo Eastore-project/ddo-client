@@ -1,6 +1,7 @@
 package sp
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"strings"
@@ -106,7 +107,7 @@ func executeSettle(c *cli.Context) error {
 		}
 		defer ethClient.Close()
 
-		currentBlock, err := ethClient.BlockNumber(nil)
+		currentBlock, err := ethClient.BlockNumber(context.TODO())
 		if err != nil {
 			return fmt.Errorf("failed to get current block number: %v", err)
 		}
@@ -144,7 +145,9 @@ func executeSettle(c *cli.Context) error {
 
 	// Get payments contract address
 	var paymentsContractAddr common.Address
-	if paymentsContractStr := c.String("payments-contract"); paymentsContractStr != "" {
+	paymentsContractStr := c.String("payments-contract"); 
+	fmt.Println("payments contract string is" , paymentsContractStr)
+	if paymentsContractStr != "" {
 		paymentsContractAddr = common.HexToAddress(paymentsContractStr)
 		fmt.Printf("Using provided payments contract address: %s\n", paymentsContractAddr.Hex())
 	} else {

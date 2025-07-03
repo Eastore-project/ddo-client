@@ -58,11 +58,6 @@ func (c *Client) GetSPSupportedTokensFromContract(actorId uint64) ([]types.Token
 		return nil, fmt.Errorf("failed to call getSPSupportedTokens: %w", err)
 	}
 
-	fmt.Printf("DEBUG: getSPSupportedTokens result length: %d\n", len(supportedTokensRaw))
-	for i, item := range supportedTokensRaw {
-		fmt.Printf("DEBUG: supportedTokens[%d] type: %T\n", i, item)
-	}
-
 	// Parse supported tokens - the result is an array containing one element which is the TokenConfig array
 	var supportedTokens []types.TokenConfig
 	if len(supportedTokensRaw) > 0 {
@@ -72,7 +67,6 @@ func (c *Client) GetSPSupportedTokensFromContract(actorId uint64) ([]types.Token
 			PricePerBytePerEpoch *big.Int       `json:"pricePerBytePerEpoch"`
 			IsActive            bool           `json:"isActive"`
 		}); ok {
-			fmt.Printf("DEBUG: Found token array with %d tokens\n", len(tokenArray))
 			supportedTokens = make([]types.TokenConfig, len(tokenArray))
 			for i, token := range tokenArray {
 				supportedTokens[i] = types.TokenConfig{
@@ -80,8 +74,6 @@ func (c *Client) GetSPSupportedTokensFromContract(actorId uint64) ([]types.Token
 					PricePerBytePerEpoch: token.PricePerBytePerEpoch,
 					IsActive:            token.IsActive,
 				}
-				fmt.Printf("DEBUG: Added token %s, price %s, active %t\n", 
-					token.Token.Hex(), token.PricePerBytePerEpoch.String(), token.IsActive)
 			}
 		} else {
 			fmt.Printf("DEBUG: Could not parse token array, type: %T\n", supportedTokensRaw[0])

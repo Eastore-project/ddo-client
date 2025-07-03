@@ -217,7 +217,7 @@ func (e *ERC20Client) CheckAndApprove(owner, spender common.Address, requiredAmo
 	if approveAmount.Cmp(maxUint256.Div(maxUint256, big.NewInt(2))) > 0 {
 		approveAmount = maxUint256
 	}
-
+	
 	// Send approval transaction
 	txHash, err := e.Approve(spender, approveAmount)
 	if err != nil {

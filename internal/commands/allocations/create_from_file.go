@@ -322,7 +322,7 @@ func executeCreateFromFile(c *cli.Context) error {
 		fmt.Printf("🔧 Setting up payments...\n")
 		
 		contractAddress := common.HexToAddress(config.ContractAddress)
-		paymentResult, err := utils.CheckAndSetupPayments(
+		err := utils.CheckAndSetupPayments(
 			ethClient,
 			ddoClient,
 			paymentsClient,
@@ -332,28 +332,6 @@ func executeCreateFromFile(c *cli.Context) error {
 		)
 		if err != nil {
 			return fmt.Errorf("failed to setup payments: %v", err)
-		}
-
-		// Wait for transactions to be mined
-		if paymentResult.TokenAllowanceTx != "" {
-			fmt.Printf("⏳ Waiting for token allowance transaction...\n")
-			if err := utils.WaitForTransaction(ethClient, paymentResult.TokenAllowanceTx); err != nil {
-				fmt.Printf("⚠️  Warning: token allowance transaction may not have been mined: %v\n", err)
-			}
-		}
-
-		if paymentResult.DepositTxHash != "" {
-			fmt.Printf("⏳ Waiting for deposit transaction...\n")
-			if err := utils.WaitForTransaction(ethClient, paymentResult.DepositTxHash); err != nil {
-				fmt.Printf("⚠️  Warning: deposit transaction may not have been mined: %v\n", err)
-			}
-		}
-
-		if paymentResult.OperatorApprovalTx != "" {
-			fmt.Printf("⏳ Waiting for operator approval transaction...\n")
-			if err := utils.WaitForTransaction(ethClient, paymentResult.OperatorApprovalTx); err != nil {
-				fmt.Printf("⚠️  Warning: operator approval transaction may not have been mined: %v\n", err)
-			}
 		}
 
 		fmt.Printf("✅ Payment setup completed!\n\n")
