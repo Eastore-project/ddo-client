@@ -250,6 +250,9 @@ You'll need both testnet FIL for gas fees and USDFC for storage payments:
 
 For this tutorial, we'll use Storage Provider **17840** which offers the following specifications:
 
+<details open>
+<summary><strong>Storage Provider 17840 Details</strong></summary>
+
 ```
 📋 Storage Provider Information
 =====================================
@@ -276,6 +279,8 @@ For this tutorial, we'll use Storage Provider **17840** which offers the followi
         1024.00 KB for 180 days: 0.00 USDC
         1024.00 KB for 360 days: 0.00 USDC
 ```
+
+</details>
 
 ### Step-by-Step Deal Creation Process
 
@@ -344,28 +349,85 @@ Now create your data allocation using the `create-from-file` command. This comma
   --input /path/to/file
 ```
 
-**Expected Output:**
+<details>
+<summary><strong>Expected Output</strong></summary>
 
 ```
-🔍 Data Preparation Starting...
-📁 Processing file: /path/to/your/file
-📦 Creating CAR file...
-🔗 Calculating piece CID: baga6ea4seaq...
-📊 Piece size: 8388608 bytes
-☁️  Uploading to Lighthouse...
-✅ Upload complete: https://gateway.lighthouse.storage/ipfs/QmXXX...
+📁 Preparing data from: /path/to/file
+✅ Data prepared successfully!
+   Piece CID: baga6ea4seaqbq6kvyhh3ezegcwkt66ew3c3ynudmklpzfiyxhl7e7pi6abpucha
+   Piece Size: 33554432 bytes
+   Payload CID: <payload_cid>
+   CAR Size: 21310472 bytes
+   Buffer URL: https://gateway.lighthouse.storage/ipfs/<cid>
 
-💰 Payment Setup:
-   Token: 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0 (USDFC)
-   Estimated cost: 0.00 USDC for 180 days
-   Payment rail initialized
-   .....
+🏗️  Allocation Creation Summary:
+   Client Address: 0x9299eac94952235Ae86b94122D2f7c77F7F6Ad30
+   DDO Contract: 0x5638917113653Ebe0B8dC0A874037088e9e297FA
+   Payments Contract: 0x549a0cE5c649fF9c284f03F479e41E1Ed881F637
+   RPC: https://api.calibration.node.glif.io/rpc/v1
+
+📦 Prepared Piece:
+   Provider: 17840
+   Size: 33554432 bytes
+   Payment Token: 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0
+   Download URL: https://gateway.lighthouse.storage/ipfs/<cid>
+
+💰 Calculating storage costs...
+📊 Cost Analysis:
+   Total Storage Cost: 539233144012800
+   Price: $2.94 USD per TB per month (31 token units per byte per epoch)
+   Total Bytes: 33554432
+   Total Epochs: 518400
+   User Address: 0x9299eac94952235Ae86b94122D2f7c77F7F6Ad30
+
+🔧 Setting up payments...
+💰 Payment Setup Summary:
+   Token: 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0
+   Total Storage Cost: 539233144012800
+   One Month Allowance: 89872190668800
+   Required Deposit: 1078466288025600
+
+📊 Current Account Status:
+   Funds: 1336406084169267
+   Lockup Current: 359490843049984
+   Available: 976915241119283
+
+⚠️  Insufficient funds. Need to deposit: 101551046906317
+🔍 Checking ERC20 token allowance...
+✅ Token allowance already sufficient
+💸 Depositing 101551046906317 tokens...
+✅ Deposit transaction sent: 0x7bf2ab7f2336b27a50d721617a0422a523b33d6b9e641ee4eace6bee6b310309
+⏳ Waiting for deposit transaction to be mined...
+⏳ Waiting for transaction 0x7bf2ab7f2336b27a50d721617a0422a523b33d6b9e641ee4eace6bee6b310309 to be mined...
+✅ Transaction mined successfully
+🔐 Operator Approval Status:
+   Is Approved: true
+   Rate Allowance: 3128688640
+   Lockup Allowance: 537472106758144
+   Rate Usage: 1040187392
+   Lockup Usage: 359488762675200
+
+🔧 Updating operator approval...
+⏳ Waiting for operator approval transaction to be mined...
+⏳ Waiting for transaction 0x51337aa1c9106f7a02a6e406490e0022ce234b8e1d1af5f42b7a8515cefc6ebf to be mined...
+✅ Transaction mined successfully
+✅ Operator approval transaction sent: 0x51337aa1c9106f7a02a6e406490e0022ce234b8e1d1af5f42b7a8515cefc6ebf
+✅ Payment setup completed!
 
 🚀 Creating allocation request...
-✅ Allocation created successfully!
-   Allocation ID: 65869
-   Transaction: 0xabc123...
+DDO Contract: 0x5638917113653Ebe0B8dC0A874037088e9e297FA
+Payments Contract: 0x549a0cE5c649fF9c284f03F479e41E1Ed881F637
+RPC: https://api.calibration.node.glif.io/rpc/v1
+✅ Transaction successful!
+Transaction Hash: 0x82dcfff2c8e98796b2a1cddbe5fcf240489e68164fea90c65725b48dd81e3f8c
+⏳ Waiting for allocation creation transaction to be mined...
+⏳ Waiting for transaction 0x82dcfff2c8e98796b2a1cddbe5fcf240489e68164fea90c65725b48dd81e3f8c to be mined...
+✅ Transaction mined successfully
+✅ Allocation creation transaction mined successfully!
 ```
+
+</details>
 
 #### Step 4: Query Your Allocations
 
@@ -380,6 +442,9 @@ Verify your allocation was created successfully:
 
 **Expected Output:**
 
+<details open>
+<summary><strong>Query Allocations Output</strong></summary>
+
 ```
 Contract: 0x5638917113653Ebe0B8dC0A874037088e9e297FA
 RPC: https://api.calibration.node.glif.io/rpc/v1
@@ -389,8 +454,10 @@ RPC: https://api.calibration.node.glif.io/rpc/v1
 Total allocations: 1
 
 Allocation IDs:
-  1: 65869
+  1: 66655
 ```
+
+</details>
 
 ### Storage Provider Data Onboarding
 
@@ -411,8 +478,37 @@ Check if the storage provider has successfully onboarded your data:
   --rpc $RPC_URL \
   --contract $DDO_CONTRACT_ADDRESS \
   --client-address 0x9299eac94952235Ae86b94122D2f7c77F7F6Ad30 \
-  --claim-id 65869
+  --claim-id 66655
 ```
+
+Expected output:
+
+<details open>
+<summary><strong>Query Claim Info Output</strong></summary>
+
+```
+🔍 Querying claim info for allocation ID: 66655
+Client: 0x9299eac94952235Ae86b94122D2f7c77F7F6Ad30
+Claim ID: 66655
+Contract: 0x5638917113653Ebe0B8dC0A874037088e9e297FA
+RPC: https://api.calibration.node.glif.io/rpc/v1
+
+📊 Results:
+Found 1 claim(s)
+
+Claim #1:
+  Provider ID: 17840
+  Client ID: 165718
+  Data (hex): 000181e2039220209c8500b9be5a8b063c769eb331c42fd4b92320da30acc640eee35b2ce4dad621
+  Piece CID: baga6ea4seaqjzbiaxg7fvcyghr3j5mzryqx5jojdedndblggidxogwzm4tnnmii
+  Size: 33554432 bytes
+  Term Min: 518400
+  Term Max: 5256000
+  Term Start: 2807249
+  Sector ID: 577
+```
+
+</details>
 
 ### Payment Settlement Process
 
@@ -433,15 +529,49 @@ Anyone can trigger payment settlement for active deals. This transfers earned pa
 
 **Example Output:**
 
+<details open>
+<summary><strong>Settlement Output</strong></summary>
+
 ```
-🔄 Settlement Process Starting...
-📊 Calculating payments for allocation 65869
-⏰ Settlement period: epochs 2500000 to 2550000
-💰 SP balance before settlement: 0.00 USDC
-✅ Settlement completed!
-   Transaction: 0xdef456...
-   SP earned: 0.15 USDC
+Using current block number as until-epoch: 2818531
+🔍 Getting SP information for provider 17840...
+payments contract string is 0x549a0cE5c649fF9c284f03F479e41E1Ed881F637
+Using provided payments contract address: 0x549a0cE5c649fF9c284f03F479e41E1Ed881F637
+🏦 Settlement Parameters:
+   User Address: 0x9299eac94952235Ae86b94122D2f7c77F7F6Ad30
+   DDO Contract: 0x5638917113653Ebe0B8dC0A874037088e9e297FA
+   Payments Contract: 0x549a0cE5c649fF9c284f03F479e41E1Ed881F637
+   Until Epoch: 2818531
+   SP Payment Address: 0xFe643b54727d53C49835f9f6c1a2B9861E741d98
+   SP Active Tokens: 1
+
+📋 SP Supported Tokens:
+   1. 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0 - active (price: $2.94 USD per TB per month (31 token units per byte per epoch))
+
+💰 Checking SP account information before settlement...
+🔍 SP Account Info (Before) - 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0:
+   Funds: 3146314318905
+   Lockup Current: 0
+   Lockup Rate: 0
+   Lockup Last Settled At: 0
+
+💰 Settling payment for allocation 66655 until epoch 2818531...
+✅ Settlement transaction successful!
+Transaction Hash: 0xa507cf0f02f180fc3e1e939307812cacd8564754b22d087ed72eab0a0ce5f494
+⏳ Waiting for settlement transaction to be mined...
+⏳ Waiting for transaction 0xa507cf0f02f180fc3e1e939307812cacd8564754b22d087ed72eab0a0ce5f494 to be mined...
+✅ Transaction mined successfully
+✅ Settlement transaction mined successfully
+
+💰 Checking SP account information after settlement...
+🔍 SP Account Info (After) - 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0:
+   Funds: 11665040468578
+   Lockup Current: 0
+   Lockup Rate: 0
+   Lockup Last Settled At: 0
 ```
+
+</details>
 
 #### Step 7: Storage Provider Withdrawal
 
@@ -458,6 +588,9 @@ The storage provider can withdraw their earned payments using their registered p
 
 **Expected Output:**
 
+<details open>
+<summary><strong>Withdrawal Output</strong></summary>
+
 ```
 💸 Withdrawal Process:
    Token: 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0 (USDFC)
@@ -467,6 +600,8 @@ The storage provider can withdraw their earned payments using their registered p
 ✅ Withdrawal successful!
    Transaction: 0x789abc...
 ```
+
+</details>
 
 ### Deal Lifecycle Summary
 

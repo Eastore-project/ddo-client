@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ipfs/go-cid"
 	"github.com/urfave/cli/v2"
 
 	"ddo-client/internal/config"
@@ -105,11 +106,23 @@ func executeQueryClaimInfo(c *cli.Context) error {
 	if jsonOutput {
 		// Output in JSON format
 		for i, claim := range claims {
+			// Decode CID from Data bytes (skip first byte which contains extra info)
+			var cidStr string
+			if len(claim.Data) > 1 {
+				actualCidData := claim.Data[1:]
+				if cidObj, err := cid.Parse(actualCidData); err == nil {
+					cidStr = cidObj.String()
+				}
+			}
+
 			fmt.Printf("{\n")
 			fmt.Printf("  \"index\": %d,\n", i)
 			fmt.Printf("  \"provider\": %d,\n", claim.Provider)
 			fmt.Printf("  \"client\": %d,\n", claim.Client)
 			fmt.Printf("  \"data\": \"%s\",\n", hex.EncodeToString(claim.Data))
+			if cidStr != "" {
+				fmt.Printf("  \"pieceCid\": \"%s\",\n", cidStr)
+			}
 			fmt.Printf("  \"size\": %d,\n", claim.Size)
 			fmt.Printf("  \"termMin\": %d,\n", claim.TermMin)
 			fmt.Printf("  \"termMax\": %d,\n", claim.TermMax)
@@ -130,10 +143,23 @@ func executeQueryClaimInfo(c *cli.Context) error {
 			fmt.Printf("No claims found for this client and claim ID.\n")
 		} else {
 			for i, claim := range claims {
+				// Decode CID from Data bytes (skip first byte which is extra info)
+				var cidStr string
+				if len(claim.Data) > 1 {
+					// Skip the first byte (extra info) and parse the rest as CID
+					actualCidData := claim.Data[1:]
+					if cidObj, err := cid.Parse(actualCidData); err == nil {
+						cidStr = cidObj.String()
+					}
+				}
+
 				fmt.Printf("Claim #%d:\n", i+1)
 				fmt.Printf("  Provider ID: %d\n", claim.Provider)
 				fmt.Printf("  Client ID: %d\n", claim.Client)
 				fmt.Printf("  Data (hex): %s\n", hex.EncodeToString(claim.Data))
+				if cidStr != "" {
+					fmt.Printf("  Piece CID: %s\n", cidStr)
+				}
 				fmt.Printf("  Size: %d bytes\n", claim.Size)
 				fmt.Printf("  Term Min: %d\n", claim.TermMin)
 				fmt.Printf("  Term Max: %d\n", claim.TermMax)
@@ -147,4 +173,4 @@ func executeQueryClaimInfo(c *cli.Context) error {
 	}
 
 	return nil
-} 
+}
