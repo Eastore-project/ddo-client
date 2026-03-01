@@ -2,14 +2,13 @@
 pragma solidity ^0.8.27;
 
 import {Test, console} from "forge-std/Test.sol";
-import {DDOClientTest} from "../src/DDOClientTest.sol";
-import {DDOTypes} from "../src/DDOTypes.sol";
-import {DDOSp} from "../src/DDOSp.sol";
-import {Payments} from "../src/Payments.sol";
-import {IPayments} from "../src/IPayments.sol";
-import {SimpleERC20} from "../src/SimpleERC20.sol";
+import {DDOClientTest} from "src/DDOClientTest.sol";
+import {DDOTypes} from "src/DDOTypes.sol";
+import {DDOSp} from "src/DDOSp.sol";
+import {FilecoinPayV1} from "filecoin-pay/FilecoinPayV1.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SimpleERC20} from "src/SimpleERC20.sol";
 import {CommonTypes} from "lib/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 /**
  * @title BaseTest
@@ -18,7 +17,7 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 contract BaseTest is Test {
     // Core contracts
     DDOClientTest public ddoClient;
-    Payments public paymentsContract;
+    FilecoinPayV1 public paymentsContract;
     SimpleERC20 public testToken;
 
     // Test accounts
@@ -27,6 +26,8 @@ contract BaseTest is Test {
     address public client2;
     address public sp1PaymentAddress;
     address public sp2PaymentAddress;
+    address public sp1MinerAddress;
+    address public sp2MinerAddress;
 
     // Test constants
     uint64 public constant SP1_ACTOR_ID = 12345;
@@ -42,6 +43,10 @@ contract BaseTest is Test {
         client2 = makeAddr("client2");
         sp1PaymentAddress = makeAddr("sp1Payment");
         sp2PaymentAddress = makeAddr("sp2Payment");
+
+        // Compute ID addresses for miner actors (0xff prefix + actor ID)
+        sp1MinerAddress = address(uint160(uint256(0xff) << 152 | uint256(SP1_ACTOR_ID)));
+        sp2MinerAddress = address(uint160(uint256(0xff) << 152 | uint256(SP2_ACTOR_ID)));
 
         // Deploy contracts
         _deployContracts();
@@ -69,23 +74,18 @@ contract BaseTest is Test {
         // Deploy test token
         testToken = new SimpleERC20();
 
-        // Deploy payments contract implementation
-        Payments paymentsImpl = new Payments();
-
-        // Deploy proxy with initialization
-        bytes memory initData = abi.encodeWithSelector(
-            Payments.initialize.selector
-        );
-        ERC1967Proxy proxy = new ERC1967Proxy(address(paymentsImpl), initData);
-
-        // Cast proxy to Payments interface
-        paymentsContract = Payments(address(proxy));
+        // Deploy payments contract directly (no proxy)
+        paymentsContract = new FilecoinPayV1();
 
         // Deploy DDO client
         ddoClient = new DDOClientTest();
 
         // Connect DDO client to payments contract
         ddoClient.setPaymentsContract(address(paymentsContract));
+
+        // Register mock miners
+        ddoClient.setMockMiner(sp1MinerAddress, SP1_ACTOR_ID);
+        ddoClient.setMockMiner(sp2MinerAddress, SP2_ACTOR_ID);
 
         console.log("Contracts deployed successfully");
     }
@@ -151,11 +151,11 @@ contract BaseTest is Test {
 
         // Deposit tokens to payments contract
         uint256 depositAmount = 500 * 10 ** 18; // 500 tokens
-        paymentsContract.deposit(address(testToken), client1, depositAmount);
+        paymentsContract.deposit(IERC20(address(testToken)), client1, depositAmount);
 
         // Set operator approval for DDO client (allow it to create rails and modify them)
         paymentsContract.setOperatorApproval(
-            address(testToken),
+            IERC20(address(testToken)),
             address(ddoClient), // operator
             true, // approved
             type(uint256).max, // rateAllowance
@@ -169,10 +169,10 @@ contract BaseTest is Test {
         vm.startPrank(client2);
 
         testToken.approve(address(paymentsContract), type(uint256).max);
-        paymentsContract.deposit(address(testToken), client2, depositAmount);
+        paymentsContract.deposit(IERC20(address(testToken)), client2, depositAmount);
 
         paymentsContract.setOperatorApproval(
-            address(testToken),
+            IERC20(address(testToken)),
             address(ddoClient),
             true,
             type(uint256).max,

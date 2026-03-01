@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import "./BaseTest.sol";
+import {console} from "forge-std/Test.sol";
+import {BaseTest, DDOTypes, FilecoinPayV1, IERC20} from "./BaseTest.sol";
 
 /**
  * @title PaymentSettlementTest
@@ -9,8 +10,6 @@ import "./BaseTest.sol";
  */
 contract PaymentSettlementTest is BaseTest {
     // Test constants for settlement
-    uint64 constant MOCK_CLAIM_SIZE = uint64(PIECE_SIZE);
-    int64 constant MOCK_TERM_START = 100; // Mock epoch when SP started storing
     uint256 constant SETTLEMENT_EPOCHS = 1000; // Settle for 1000 epochs
 
     function testE2EAllocationToPaymentSettlement() public {
@@ -28,13 +27,13 @@ contract PaymentSettlementTest is BaseTest {
             uint256 initialLockup,
             ,
 
-        ) = paymentsContract.accounts(address(testToken), client1);
+        ) = paymentsContract.accounts(IERC20(address(testToken)), client1);
         (uint256 initialSpFunds, , , ) = paymentsContract.accounts(
-            address(testToken),
+            IERC20(address(testToken)),
             sp1PaymentAddress
         );
         (uint256 initialOperatorFunds, , , ) = paymentsContract.accounts(
-            address(testToken),
+            IERC20(address(testToken)),
             owner
         );
 
@@ -47,81 +46,69 @@ contract PaymentSettlementTest is BaseTest {
 
         // Get allocation and rail IDs
         uint64 allocationId = ddoClient.getAllocationIdsForClient(client1)[0];
-        uint256 railId = ddoClient.allocationIdToRailId(allocationId);
+        (,,,,,,uint256 railId) = ddoClient.allocationInfos(allocationId);
 
         console.log("Allocation ID:", allocationId);
         console.log("Rail ID:", railId);
 
-        // Verify lockup increased
-        uint256 expectedLockup = PIECE_SIZE *
-            PRICE_PER_BYTE_PER_EPOCH *
-            ddoClient.EPOCHS_PER_MONTH();
+        // Verify lockup increased by anti-spam amount
+        uint256 allocationLockup = ddoClient.allocationLockupAmount();
         (, uint256 afterAllocLockup, , ) = paymentsContract.accounts(
-            address(testToken),
+            IERC20(address(testToken)),
             client1
         );
         assertEq(
             afterAllocLockup,
-            initialLockup + expectedLockup,
+            initialLockup + allocationLockup,
             "Lockup should increase"
         );
 
-        // Step 2A: First Payment Setup
-        console.log("=== Step 2A: First Payment Setup ===");
-        vm.roll(uint256(int256(MOCK_TERM_START)));
+        // Step 2A: Activate allocation (replaces first payment setup)
+        console.log("=== Step 2A: Activate Allocation ===");
+        ddoClient.mockActivateAllocation(allocationId);
 
-        vm.prank(client1);
-        ddoClient.mockSettleSpFirstPayment(
-            allocationId,
-            MOCK_CLAIM_SIZE,
-            MOCK_TERM_START
-        );
-
-        // Log rail state after first payment setup
-        IPayments.RailView memory railAfterFirstPayment = paymentsContract
+        // Log rail state after activation
+        FilecoinPayV1.RailView memory railAfterActivation = paymentsContract
             .getRail(railId);
-        console.log("=== Rail State After First Payment Setup ===");
-        console.log("Payment rate:", railAfterFirstPayment.paymentRate);
-        console.log("Settled up to:", railAfterFirstPayment.settledUpTo);
-        console.log("Lockup fixed:", railAfterFirstPayment.lockupFixed);
-        console.log("Lockup period:", railAfterFirstPayment.lockupPeriod);
+        console.log("=== Rail State After Activation ===");
+        console.log("Payment rate:", railAfterActivation.paymentRate);
+        console.log("Settled up to:", railAfterActivation.settledUpTo);
+        console.log("Lockup fixed:", railAfterActivation.lockupFixed);
+        console.log("Lockup period:", railAfterActivation.lockupPeriod);
 
-        // Verify first payment setup
+        // Verify activation setup
         assertEq(
-            railAfterFirstPayment.paymentRate,
-            PRICE_PER_BYTE_PER_EPOCH * MOCK_CLAIM_SIZE,
+            railAfterActivation.paymentRate,
+            PRICE_PER_BYTE_PER_EPOCH * PIECE_SIZE,
             "Payment rate should be set"
         );
         assertEq(
-            railAfterFirstPayment.lockupFixed,
+            railAfterActivation.lockupFixed,
             0,
-            "Fixed lockup should be cleared after first payment setup"
+            "Fixed lockup should be cleared after activation"
         );
         assertEq(
-            railAfterFirstPayment.lockupPeriod,
+            railAfterActivation.lockupPeriod,
             ddoClient.EPOCHS_PER_MONTH(),
             "Should have monthly lockup period"
         );
-        // client lockup should be increased by expected lockup for one month
-        //get current lockup from payments contract
+        // After activation, lockup switches to streaming (rate * EPOCHS_PER_MONTH)
+        uint256 expectedStreamingLockup = PRICE_PER_BYTE_PER_EPOCH * PIECE_SIZE * ddoClient.EPOCHS_PER_MONTH();
         (, uint256 currentClientLockup, , ) = paymentsContract.accounts(
-            address(testToken),
+            IERC20(address(testToken)),
             client1
         );
         assertEq(
             currentClientLockup,
-            expectedLockup,
-            "Client lockup should be increased by expected lockup for one month"
+            expectedStreamingLockup,
+            "Client lockup should reflect streaming lockup after activation"
         );
-        console.log("epoch after first payment setup:", block.number);
+        console.log("epoch after activation:", block.number);
 
         // Step 2B: Actual settlement after time passes
         console.log("=== Step 2B: Settlement After Time Passage ===");
 
-        // Step 2B: Settlement after time passes
-        console.log("=== Settlement ===");
-        uint256 settlementEpoch = uint256(int256(MOCK_TERM_START)) +
-            SETTLEMENT_EPOCHS;
+        uint256 settlementEpoch = block.number + SETTLEMENT_EPOCHS;
         vm.roll(settlementEpoch);
         console.log("Current block (settlement):", block.number);
         console.log("Settlement epoch:", settlementEpoch);
@@ -131,21 +118,19 @@ contract PaymentSettlementTest is BaseTest {
         (
             uint256 totalSettledAmount,
             uint256 totalNetPayeeAmount,
-            uint256 totalPaymentFee,
             uint256 totalOperatorCommission,
+            uint256 totalNetworkFee,
             uint256 finalSettledEpoch,
             string memory note
         ) = ddoClient.mockSettleSpPayment(
                 allocationId,
-                MOCK_CLAIM_SIZE,
-                MOCK_TERM_START,
                 settlementEpoch
             );
 
         console.log("=== Settlement Results ===");
         console.log("Total settled amount:", totalSettledAmount);
         console.log("Net payee amount:", totalNetPayeeAmount);
-        console.log("Payment fee:", totalPaymentFee);
+        console.log("Network fee:", totalNetworkFee);
         console.log("Operator commission:", totalOperatorCommission);
         console.log("Final settled epoch:", finalSettledEpoch);
         console.log("Settlement note:", note);
@@ -155,13 +140,13 @@ contract PaymentSettlementTest is BaseTest {
         assertTrue(totalNetPayeeAmount > 0, "SP should receive payment");
         assertEq(
             totalSettledAmount,
-            totalNetPayeeAmount + totalPaymentFee + totalOperatorCommission,
+            totalNetPayeeAmount + totalNetworkFee + totalOperatorCommission,
             "Total should equal sum of components"
         );
         // check total settled amount value
         assertEq(
             totalSettledAmount,
-            railAfterFirstPayment.paymentRate * SETTLEMENT_EPOCHS,
+            railAfterActivation.paymentRate * SETTLEMENT_EPOCHS,
             "Total should equal payment rate * settlement epochs"
         );
 
@@ -171,13 +156,13 @@ contract PaymentSettlementTest is BaseTest {
             uint256 finalClientLockup,
             ,
 
-        ) = paymentsContract.accounts(address(testToken), client1);
+        ) = paymentsContract.accounts(IERC20(address(testToken)), client1);
         (uint256 finalSpFunds, , , ) = paymentsContract.accounts(
-            address(testToken),
+            IERC20(address(testToken)),
             sp1PaymentAddress
         );
         (uint256 finalOperatorFunds, , , ) = paymentsContract.accounts(
-            address(testToken),
+            IERC20(address(testToken)),
             owner
         );
 
@@ -205,7 +190,7 @@ contract PaymentSettlementTest is BaseTest {
         );
 
         // Verify rail state after final settlement
-        IPayments.RailView memory railAfterSettlement = paymentsContract
+        FilecoinPayV1.RailView memory railAfterSettlement = paymentsContract
             .getRail(railId);
         assertEq(
             railAfterSettlement.settledUpTo,
@@ -241,41 +226,25 @@ contract PaymentSettlementTest is BaseTest {
         );
         assertEq(allocationIds.length, 2, "Should have 2 allocations");
 
-        // Step 2A: First Payment Setup for both allocations
-        console.log("=== Step 2A: First Payment Setup ===");
-        vm.roll(uint256(int256(MOCK_TERM_START)));
+        // Step 2A: Activate both allocations
+        console.log("=== Step 2A: Activate Allocations ===");
 
         // Get initial SP balances
         (uint256 initialSp1Funds, , , ) = paymentsContract.accounts(
-            address(testToken),
+            IERC20(address(testToken)),
             sp1PaymentAddress
         );
         (uint256 initialSp2Funds, , , ) = paymentsContract.accounts(
-            address(testToken),
+            IERC20(address(testToken)),
             sp2PaymentAddress
         );
 
-        vm.startPrank(client1);
-
-        // Setup first payment for both allocations
-        ddoClient.mockSettleSpFirstPayment(
-            allocationIds[0],
-            MOCK_CLAIM_SIZE,
-            MOCK_TERM_START
-        );
-
-        ddoClient.mockSettleSpFirstPayment(
-            allocationIds[1],
-            uint64(PIECE_SIZE / 2),
-            MOCK_TERM_START
-        );
-
-        vm.stopPrank();
+        ddoClient.mockActivateAllocation(allocationIds[0]);
+        ddoClient.mockActivateAllocation(allocationIds[1]);
 
         // Step 2B: Settlement after time passes
         console.log("=== Step 2B: Settlement After Time Passage ===");
-        uint256 settlementEpoch = uint256(int256(MOCK_TERM_START)) +
-            SETTLEMENT_EPOCHS;
+        uint256 settlementEpoch = block.number + SETTLEMENT_EPOCHS;
         vm.roll(settlementEpoch);
 
         vm.startPrank(client1);
@@ -284,8 +253,6 @@ contract PaymentSettlementTest is BaseTest {
         (uint256 settled1, uint256 netPayee1, , , , ) = ddoClient
             .mockSettleSpPayment(
                 allocationIds[0],
-                MOCK_CLAIM_SIZE,
-                MOCK_TERM_START,
                 settlementEpoch
             );
 
@@ -293,8 +260,6 @@ contract PaymentSettlementTest is BaseTest {
         (uint256 settled2, uint256 netPayee2, , , , ) = ddoClient
             .mockSettleSpPayment(
                 allocationIds[1],
-                uint64(PIECE_SIZE / 2),
-                MOCK_TERM_START,
                 settlementEpoch
             );
 
@@ -302,11 +267,11 @@ contract PaymentSettlementTest is BaseTest {
 
         // Check final SP balances
         (uint256 finalSp1Funds, , , ) = paymentsContract.accounts(
-            address(testToken),
+            IERC20(address(testToken)),
             sp1PaymentAddress
         );
         (uint256 finalSp2Funds, , , ) = paymentsContract.accounts(
-            address(testToken),
+            IERC20(address(testToken)),
             sp2PaymentAddress
         );
 
@@ -360,30 +325,23 @@ contract PaymentSettlementTest is BaseTest {
         );
         uint64 allocationId = allocationIds[0];
 
-        // Step 2A: First Payment Setup
-        console.log("=== Step 2A: First Payment Setup ===");
-        vm.roll(uint256(int256(MOCK_TERM_START)));
+        // Activate allocation
+        console.log("=== Activate Allocation ===");
+        ddoClient.mockActivateAllocation(allocationId);
 
-        vm.prank(client1);
-        ddoClient.mockSettleSpFirstPayment(
-            allocationId,
-            MOCK_CLAIM_SIZE,
-            MOCK_TERM_START
-        );
-
-        // Check account state after first payment setup
+        // Check account state after activation
         (
             uint256 afterSetupFunds,
             uint256 afterSetupLockup,
             ,
 
-        ) = paymentsContract.accounts(address(testToken), client1);
-        console.log("After setup - Funds:", afterSetupFunds);
-        console.log("After setup - Lockup:", afterSetupLockup);
+        ) = paymentsContract.accounts(IERC20(address(testToken)), client1);
+        console.log("After activation - Funds:", afterSetupFunds);
+        console.log("After activation - Lockup:", afterSetupLockup);
 
         // Get unlocked funds
         (, , uint256 unlockedFunds, ) = paymentsContract
-            .getAccountInfoIfSettled(address(testToken), client1);
+            .getAccountInfoIfSettled(IERC20(address(testToken)), client1);
         console.log("Unlocked funds:", unlockedFunds);
         uint256 leaveFundsForBlocks = 10;
         console.log(
@@ -396,19 +354,18 @@ contract PaymentSettlementTest is BaseTest {
         // withdraw the unlocked funds
         vm.prank(client1);
         paymentsContract.withdraw(
-            address(testToken),
+            IERC20(address(testToken)),
             unlockedFunds -
                 PRICE_PER_BYTE_PER_EPOCH *
                 PIECE_SIZE *
                 leaveFundsForBlocks
         );
-        // get the balance again
 
-        // Step 2B: Settlement after time passes with insufficient funds
+        // Settlement after time passes with insufficient funds
         console.log(
-            "=== Step 2B: Settlement After Time Passage (Insufficient Funds) ==="
+            "=== Settlement After Time Passage (Insufficient Funds) ==="
         );
-        uint256 settlementEpoch = uint256(int256(MOCK_TERM_START)) +
+        uint256 settlementEpoch = block.number +
             10000 +
             ddoClient.EPOCHS_PER_MONTH();
         vm.roll(settlementEpoch);
@@ -418,15 +375,13 @@ contract PaymentSettlementTest is BaseTest {
         try
             ddoClient.mockSettleSpPayment(
                 allocationId,
-                MOCK_CLAIM_SIZE,
-                MOCK_TERM_START,
                 settlementEpoch
             )
         returns (
             uint256 settled,
             uint256 netPayee,
-            uint256 fee,
-            uint256 commission,
+            uint256 operatorCommission,
+            uint256 networkFee,
             uint256 finalEpoch,
             string memory note
         ) {
@@ -441,10 +396,10 @@ contract PaymentSettlementTest is BaseTest {
                 "Should settle less due to insufficient funds"
             );
 
-            // check if the settlement epoch is what we left funds for
+            // check if the settlement epoch is close to what we left funds for
             assertEq(
                 finalEpoch,
-                uint256(int256(MOCK_TERM_START)) + leaveFundsForBlocks,
+                1 + leaveFundsForBlocks,
                 "Settlement epoch should be what we left funds for"
             );
         } catch Error(string memory reason) {
@@ -471,10 +426,10 @@ contract PaymentSettlementTest is BaseTest {
             client1
         );
         uint64 allocationId = allocationIds[0];
-        uint256 railId = ddoClient.allocationIdToRailId(allocationId);
+        (,,,,,,uint256 railId) = ddoClient.allocationInfos(allocationId);
 
         // Check initial rail state
-        IPayments.RailView memory initialRail = paymentsContract.getRail(
+        FilecoinPayV1.RailView memory initialRail = paymentsContract.getRail(
             railId
         );
         console.log("=== Initial Rail State ===");
@@ -495,33 +450,23 @@ contract PaymentSettlementTest is BaseTest {
         );
         assertTrue(initialRail.lockupFixed > 0, "Should have fixed lockup");
 
-        // Step 2A: First Payment Setup
-        console.log("=== Step 2A: First Payment Setup ===");
-        vm.roll(uint256(int256(MOCK_TERM_START)));
+        // Activate allocation
+        console.log("=== Activate Allocation ===");
+        ddoClient.mockActivateAllocation(allocationId);
 
-        vm.prank(client1);
-        ddoClient.mockSettleSpFirstPayment(
-            allocationId,
-            MOCK_CLAIM_SIZE,
-            MOCK_TERM_START
-        );
-
-        // Step 2B: Settlement after time passes
-        console.log("=== Step 2B: Settlement After Time Passage ===");
-        uint256 settlementEpoch = uint256(int256(MOCK_TERM_START)) +
-            SETTLEMENT_EPOCHS;
+        // Settlement after time passes
+        console.log("=== Settlement After Time Passage ===");
+        uint256 settlementEpoch = block.number + SETTLEMENT_EPOCHS;
         vm.roll(settlementEpoch);
 
         vm.prank(client1);
         ddoClient.mockSettleSpPayment(
             allocationId,
-            MOCK_CLAIM_SIZE,
-            MOCK_TERM_START,
             settlementEpoch
         );
 
         // Check rail state after settlement
-        IPayments.RailView memory finalRail = paymentsContract.getRail(railId);
+        FilecoinPayV1.RailView memory finalRail = paymentsContract.getRail(railId);
         console.log("=== Final Rail State ===");
         console.log("Payment rate:", finalRail.paymentRate);
         console.log("Settled up to:", finalRail.settledUpTo);
@@ -541,7 +486,7 @@ contract PaymentSettlementTest is BaseTest {
         assertEq(
             finalRail.lockupFixed,
             0,
-            "Fixed lockup should be cleared after first settlement"
+            "Fixed lockup should be cleared after activation"
         );
         assertEq(
             finalRail.lockupPeriod,

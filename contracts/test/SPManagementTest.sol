@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import "./BaseTest.sol";
+import {console} from "forge-std/Test.sol";
+import {BaseTest, DDOTypes, DDOSp, SimpleERC20} from "./BaseTest.sol";
 
 /**
  * @title SPManagementTest
@@ -226,7 +227,7 @@ contract SPManagementTest is BaseTest {
         console.log("Deactivated token for SP1");
 
         // Should now revert when trying to get price for inactive token
-        vm.expectRevert(abi.encodeWithSignature("TokenNotSupportedBySP()"));
+        vm.expectRevert(abi.encodeWithSignature("DDOSp__TokenNotSupportedBySP()"));
         ddoClient.getSPActivePricePerBytePerEpoch(
             SP1_ACTOR_ID,
             address(testToken)
@@ -289,7 +290,7 @@ contract SPManagementTest is BaseTest {
         pieceInfos[0] = pieceInfo;
 
         vm.prank(client1);
-        vm.expectRevert(abi.encodeWithSignature("SPNotActive()"));
+        vm.expectRevert(abi.encodeWithSignature("DDOSp__SPNotActive()"));
         ddoClient.mockCreateAllocationRequests(pieceInfos);
 
         console.log(
@@ -308,7 +309,7 @@ contract SPManagementTest is BaseTest {
             isActive: true
         });
 
-        vm.expectRevert(abi.encodeWithSignature("SPAlreadyRegistered()"));
+        vm.expectRevert(abi.encodeWithSignature("DDOSp__SPAlreadyRegistered()"));
         ddoClient.registerSP(
             SP1_ACTOR_ID, // Same ID as existing SP
             sp1PaymentAddress,
@@ -326,7 +327,7 @@ contract SPManagementTest is BaseTest {
         uint64 nonExistentSPId = 99999;
 
         // Try to update token config for non-existent SP
-        vm.expectRevert(abi.encodeWithSignature("SPNotRegistered()"));
+        vm.expectRevert(abi.encodeWithSignature("DDOSp__SPNotRegistered()"));
         ddoClient.updateSPToken(
             nonExistentSPId,
             address(testToken),

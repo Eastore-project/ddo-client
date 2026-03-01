@@ -13,3 +13,6 @@
 [submodule "contracts/lib/openzeppelin-contracts-upgradeable"]
 	path = contracts/lib/openzeppelin-contracts-upgradeable
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable
+[submodule "contracts/lib/filecoin-pay"]
+	path = contracts/lib/filecoin-pay
+	url = https://github.com/FilOzone/filecoin-pay

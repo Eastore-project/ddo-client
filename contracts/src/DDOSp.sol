@@ -2,14 +2,17 @@
 pragma solidity ^0.8.27;
 
 import {DDOTypes} from "./DDOTypes.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title DDOSp
  * @notice Storage Provider management contract with multi-token support
  */
 contract DDOSp is DDOTypes, Ownable {
-    // SP Configuration Structs (Simplified & Gas Optimized)
+    /*//////////////////////////////////////////////////////////////
+                             TYPE DECLARATIONS
+    //////////////////////////////////////////////////////////////*/
+
     struct TokenConfig {
         address token; // Token address (address(0) for ETH)
         uint256 pricePerBytePerEpoch; // Price in token's smallest unit
@@ -26,10 +29,23 @@ contract DDOSp is DDOTypes, Ownable {
         bool isActive; // Whether SP is accepting new deals
     }
 
-    // Simplified SP Storage (owner-only approach)
+    /*//////////////////////////////////////////////////////////////
+                              STATE VARIABLES
+    //////////////////////////////////////////////////////////////*/
+
     mapping(uint64 => SPConfig) public spConfigs; // actorId => config
 
-    // SP Events
+    /*//////////////////////////////////////////////////////////////
+                                CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
+    uint256 public constant EPOCHS_PER_DAY = 2880; // ~30 second epochs
+    uint256 public constant EPOCHS_PER_MONTH = 86400; // ~30 days
+
+    /*//////////////////////////////////////////////////////////////
+                                 EVENTS
+    //////////////////////////////////////////////////////////////*/
+
     event SPRegistered(
         uint64 indexed actorId,
         address paymentAddress,
@@ -50,19 +66,25 @@ contract DDOSp is DDOTypes, Ownable {
     event SPConfigUpdated(uint64 indexed actorId);
     event SPDeactivated(uint64 indexed actorId);
 
-    // SP Errors
-    error SPAlreadyRegistered();
-    error SPNotRegistered();
-    error InvalidSPConfig();
-    error TokenNotSupportedBySP();
-    error PieceSizeOutOfRange();
-    error TermLengthOutOfRange();
-    error TokenAlreadyExists();
-    error TokenNotFound();
-    error TokenInactive();
-    error SPNotActive();
+    /*//////////////////////////////////////////////////////////////
+                                 ERRORS
+    //////////////////////////////////////////////////////////////*/
 
-    // Modifiers
+    error DDOSp__SPAlreadyRegistered();
+    error DDOSp__SPNotRegistered();
+    error DDOSp__InvalidSPConfig();
+    error DDOSp__TokenNotSupportedBySP();
+    error DDOSp__PieceSizeOutOfRange();
+    error DDOSp__TermLengthOutOfRange();
+    error DDOSp__TokenAlreadyExists();
+    error DDOSp__TokenNotFound();
+    error DDOSp__TokenInactive();
+    error DDOSp__SPNotActive();
+
+    /*//////////////////////////////////////////////////////////////
+                                MODIFIERS
+    //////////////////////////////////////////////////////////////*/
+
     modifier onlyValidSPConfig(
         uint64 actorId,
         address paymentAddress,
@@ -72,35 +94,33 @@ contract DDOSp is DDOTypes, Ownable {
         int64 maxTermLength
     ) {
         if (actorId == 0) {
-            revert InvalidSPConfig();
+            revert DDOSp__InvalidSPConfig();
         }
         if (paymentAddress == address(0)) {
-            revert InvalidSPConfig();
+            revert DDOSp__InvalidSPConfig();
         }
         if (minPieceSize == 0 || maxPieceSize < minPieceSize) {
-            revert InvalidSPConfig();
+            revert DDOSp__InvalidSPConfig();
         }
         if (minTermLength <= 0 || maxTermLength < minTermLength) {
-            revert InvalidSPConfig();
+            revert DDOSp__InvalidSPConfig();
         }
         _;
     }
 
     modifier onlyValidTokenConfigs(TokenConfig[] memory tokenConfigs) {
         if (tokenConfigs.length == 0) {
-            revert InvalidSPConfig();
+            revert DDOSp__InvalidSPConfig();
         }
 
-        // Validate token configs
-        for (uint256 i = 0; i < tokenConfigs.length; i++) {
+        for (uint256 i; i < tokenConfigs.length; i++) {
             if (!tokenConfigs[i].isActive) {
-                revert TokenInactive();
+                revert DDOSp__TokenInactive();
             }
 
-            // Check for duplicate tokens
             for (uint256 j = i + 1; j < tokenConfigs.length; j++) {
                 if (tokenConfigs[i].token == tokenConfigs[j].token) {
-                    revert TokenAlreadyExists();
+                    revert DDOSp__TokenAlreadyExists();
                 }
             }
         }
@@ -109,42 +129,38 @@ contract DDOSp is DDOTypes, Ownable {
 
     modifier onlyRegisteredSP(uint64 actorId) {
         if (spConfigs[actorId].paymentAddress == address(0)) {
-            revert SPNotRegistered();
+            revert DDOSp__SPNotRegistered();
         }
         _;
     }
 
     modifier onlyValidPieceForSP(PieceInfo[] memory pieceInfos) {
-        for (uint256 i = 0; i < pieceInfos.length; i++) {
+        for (uint256 i; i < pieceInfos.length; i++) {
             uint64 actorId = pieceInfos[i].provider;
 
-            // Check if SP is registered and active
             if (spConfigs[actorId].paymentAddress == address(0)) {
-                revert SPNotRegistered();
+                revert DDOSp__SPNotRegistered();
             }
             if (!spConfigs[actorId].isActive) {
-                revert SPNotActive();
+                revert DDOSp__SPNotActive();
             }
 
             SPConfig memory config = spConfigs[actorId];
 
-            // Validate piece size
             if (
                 pieceInfos[i].size < config.minPieceSize ||
                 pieceInfos[i].size > config.maxPieceSize
             ) {
-                revert PieceSizeOutOfRange();
+                revert DDOSp__PieceSizeOutOfRange();
             }
 
-            // Validate term length
             if (
                 pieceInfos[i].termMin < config.minTermLength ||
                 pieceInfos[i].termMax > config.maxTermLength
             ) {
-                revert TermLengthOutOfRange();
+                revert DDOSp__TermLengthOutOfRange();
             }
 
-            // Validate token support (will revert if token not supported or inactive)
             this.getSPActivePricePerBytePerEpoch(
                 actorId,
                 pieceInfos[i].paymentTokenAddress
@@ -153,11 +169,15 @@ contract DDOSp is DDOTypes, Ownable {
         _;
     }
 
+    /*//////////////////////////////////////////////////////////////
+                              CONSTRUCTOR
+    //////////////////////////////////////////////////////////////*/
+
     constructor() Ownable(msg.sender) {}
 
-    // Constants for time conversion
-    uint256 public constant EPOCHS_PER_DAY = 2880; // ~30 second epochs
-    uint256 public constant EPOCHS_PER_MONTH = 86400; // ~30 days
+    /*//////////////////////////////////////////////////////////////
+                    EXTERNAL STATE-CHANGING FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     /**
      * @notice Register as a Storage Provider (Owner only)
@@ -190,12 +210,10 @@ contract DDOSp is DDOTypes, Ownable {
         )
         onlyValidTokenConfigs(tokenConfigs)
     {
-        // Check if SP already registered
         if (spConfigs[actorId].paymentAddress != address(0)) {
-            revert SPAlreadyRegistered();
+            revert DDOSp__SPAlreadyRegistered();
         }
 
-        // Store SP configuration
         SPConfig storage newConfig = spConfigs[actorId];
         newConfig.paymentAddress = paymentAddress;
         newConfig.minPieceSize = minPieceSize;
@@ -204,8 +222,7 @@ contract DDOSp is DDOTypes, Ownable {
         newConfig.maxTermLength = maxTermLength;
         newConfig.isActive = true;
 
-        // Manually copy token configs from memory to storage
-        for (uint256 i = 0; i < tokenConfigs.length; i++) {
+        for (uint256 i; i < tokenConfigs.length; i++) {
             newConfig.supportedTokens.push(tokenConfigs[i]);
         }
 
@@ -263,14 +280,12 @@ contract DDOSp is DDOTypes, Ownable {
     ) external onlyOwner onlyRegisteredSP(actorId) {
         SPConfig storage config = spConfigs[actorId];
 
-        // Check if token already exists
-        for (uint256 i = 0; i < config.supportedTokens.length; i++) {
+        for (uint256 i; i < config.supportedTokens.length; i++) {
             if (config.supportedTokens[i].token == token) {
-                revert TokenAlreadyExists();
+                revert DDOSp__TokenAlreadyExists();
             }
         }
 
-        // Add new token
         config.supportedTokens.push(
             TokenConfig({
                 token: token,
@@ -293,8 +308,7 @@ contract DDOSp is DDOTypes, Ownable {
     ) external onlyOwner onlyRegisteredSP(actorId) {
         SPConfig storage config = spConfigs[actorId];
 
-        // Find and update token
-        for (uint256 i = 0; i < config.supportedTokens.length; i++) {
+        for (uint256 i; i < config.supportedTokens.length; i++) {
             if (config.supportedTokens[i].token == token) {
                 config
                     .supportedTokens[i]
@@ -311,7 +325,7 @@ contract DDOSp is DDOTypes, Ownable {
             }
         }
 
-        revert TokenNotFound();
+        revert DDOSp__TokenNotFound();
     }
 
     /**
@@ -323,10 +337,8 @@ contract DDOSp is DDOTypes, Ownable {
     ) external onlyOwner onlyRegisteredSP(actorId) {
         SPConfig storage config = spConfigs[actorId];
 
-        // Find and remove token
-        for (uint256 i = 0; i < config.supportedTokens.length; i++) {
+        for (uint256 i; i < config.supportedTokens.length; i++) {
             if (config.supportedTokens[i].token == token) {
-                // Move last element to current position and pop
                 config.supportedTokens[i] = config.supportedTokens[
                     config.supportedTokens.length - 1
                 ];
@@ -337,7 +349,7 @@ contract DDOSp is DDOTypes, Ownable {
             }
         }
 
-        revert TokenNotFound();
+        revert DDOSp__TokenNotFound();
     }
 
     /**
@@ -350,16 +362,9 @@ contract DDOSp is DDOTypes, Ownable {
         emit SPDeactivated(actorId);
     }
 
-    // ======================== GETTER FUNCTIONS ========================
-
-    // /**
-    //  * @notice Get complete SP configuration
-    //  */
-    // function getSPConfig(
-    //     uint64 actorId
-    // ) external view onlyRegisteredSP(actorId) returns (SPConfig memory) {
-    //     return spConfigs[actorId];
-    // }
+    /*//////////////////////////////////////////////////////////////
+                      EXTERNAL READ-ONLY FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     /**
      * @notice Get token price for specific SP and token (per epoch)
@@ -374,13 +379,13 @@ contract DDOSp is DDOTypes, Ownable {
         returns (uint256 price, bool isActive)
     {
         TokenConfig[] memory tokens = spConfigs[actorId].supportedTokens;
-        for (uint256 i = 0; i < tokens.length; i++) {
+        for (uint256 i; i < tokens.length; i++) {
             if (tokens[i].token == token) {
                 return (tokens[i].pricePerBytePerEpoch, tokens[i].isActive);
             }
         }
 
-        return (0, false); // Token not found
+        return (0, false);
     }
 
     /**
@@ -400,13 +405,13 @@ contract DDOSp is DDOTypes, Ownable {
         returns (uint256 pricePerBytePerEpoch)
     {
         TokenConfig[] memory tokens = spConfigs[actorId].supportedTokens;
-        for (uint256 i = 0; i < tokens.length; i++) {
+        for (uint256 i; i < tokens.length; i++) {
             if (tokens[i].token == token && tokens[i].isActive) {
                 return tokens[i].pricePerBytePerEpoch;
             }
         }
 
-        revert TokenNotSupportedBySP();
+        revert DDOSp__TokenNotSupportedBySP();
     }
 
     /**
@@ -422,11 +427,9 @@ contract DDOSp is DDOTypes, Ownable {
         returns (uint256 pricePerTBPerMonth, bool isActive)
     {
         TokenConfig[] memory tokens = spConfigs[actorId].supportedTokens;
-        for (uint256 i = 0; i < tokens.length; i++) {
+        for (uint256 i; i < tokens.length; i++) {
             if (tokens[i].token == token) {
                 if (tokens[i].isActive) {
-                    // Convert: price per byte per epoch -> price per TB per month
-                    // 1 TB = 10^12 bytes, 1 month = ~86400 epochs
                     pricePerTBPerMonth =
                         tokens[i].pricePerBytePerEpoch *
                         1e12 *
@@ -437,7 +440,7 @@ contract DDOSp is DDOTypes, Ownable {
             }
         }
 
-        return (0, false); // Token not found
+        return (0, false);
     }
 
     /**
@@ -462,18 +465,15 @@ contract DDOSp is DDOTypes, Ownable {
         pricesPerTBPerMonth = new uint256[](length);
         activeStatus = new bool[](length);
 
-        for (uint256 i = 0; i < length; i++) {
+        for (uint256 i; i < length; i++) {
             tokens[i] = tokenConfigs[i].token;
             activeStatus[i] = tokenConfigs[i].isActive;
 
             if (tokenConfigs[i].isActive) {
-                // Convert to price per GB per month
                 pricesPerTBPerMonth[i] =
                     tokenConfigs[i].pricePerBytePerEpoch *
                     1e12 *
                     EPOCHS_PER_MONTH;
-            } else {
-                pricesPerTBPerMonth[i] = 0;
             }
         }
 
@@ -491,22 +491,21 @@ contract DDOSp is DDOTypes, Ownable {
     ) external view onlyRegisteredSP(actorId) returns (uint256 totalCost) {
         SPConfig memory config = spConfigs[actorId];
         if (!config.isActive) {
-            revert SPNotActive();
+            revert DDOSp__SPNotActive();
         }
         if (
             pieceSize < config.minPieceSize || pieceSize > config.maxPieceSize
         ) {
-            revert PieceSizeOutOfRange();
+            revert DDOSp__PieceSizeOutOfRange();
         }
         if (
             termLength < config.minTermLength ||
             termLength > config.maxTermLength
         ) {
-            revert TermLengthOutOfRange();
+            revert DDOSp__TermLengthOutOfRange();
         }
 
-        // Find token pricing
-        for (uint256 i = 0; i < config.supportedTokens.length; i++) {
+        for (uint256 i; i < config.supportedTokens.length; i++) {
             TokenConfig memory tokenConfig = config.supportedTokens[i];
             if (tokenConfig.token == token && tokenConfig.isActive) {
                 totalCost =
@@ -517,7 +516,7 @@ contract DDOSp is DDOTypes, Ownable {
             }
         }
 
-        revert TokenNotSupportedBySP();
+        revert DDOSp__TokenNotSupportedBySP();
     }
 
     /**
@@ -530,7 +529,7 @@ contract DDOSp is DDOTypes, Ownable {
         if (spConfigs[actorId].paymentAddress == address(0)) return false;
 
         TokenConfig[] memory tokens = spConfigs[actorId].supportedTokens;
-        for (uint256 i = 0; i < tokens.length; i++) {
+        for (uint256 i; i < tokens.length; i++) {
             if (tokens[i].token == token && tokens[i].isActive) {
                 return true;
             }
@@ -591,13 +590,13 @@ contract DDOSp is DDOTypes, Ownable {
         returns (uint256 pricePerBytePerEpoch)
     {
         TokenConfig[] memory tokens = spConfigs[actorId].supportedTokens;
-        for (uint256 i = 0; i < tokens.length; i++) {
+        for (uint256 i; i < tokens.length; i++) {
             if (tokens[i].token == token && tokens[i].isActive) {
                 return tokens[i].pricePerBytePerEpoch;
             }
         }
 
-        revert TokenNotSupportedBySP();
+        revert DDOSp__TokenNotSupportedBySP();
     }
 
     /**

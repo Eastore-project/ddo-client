@@ -1,33 +1,16 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.27;
 
-/// @title IValidator Interface
-/// @notice Interface for validating payment settlements
-interface IValidator {
-    struct ValidationResult {
-        // The actual payment amount determined by the validator after validation of a rail during settlement
-        uint256 modifiedAmount;
-        // The epoch up to and including which settlement should occur.
-        uint256 settleUpto;
-        // A placeholder note for any additional information the validator wants to send to the caller of `settleRail`
-        string note;
-    }
-
-    function validatePayment(
-        uint256 railId,
-        uint256 proposedAmount,
-        // the epoch up to and including which the rail has already been settled
-        uint256 fromEpoch,
-        // the epoch up to and including which validation is requested; payment will be validated for (toEpoch - fromEpoch) epochs
-        uint256 toEpoch,
-        uint256 rate
-    ) external returns (ValidationResult memory result);
-}
+import {IValidator} from "filecoin-pay/FilecoinPayV1.sol";
 
 /// @title DDOValidator
 /// @notice Simple validator implementation that passes through payment requests without modification
 /// @dev This is a basic implementation that can be extended later with actual validation logic
 contract DDOValidator is IValidator {
+    /*//////////////////////////////////////////////////////////////
+                      EXTERNAL READ-ONLY FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
     /// @notice Validates a payment request by simply approving the proposed amount
     /// @param railId The ID of the rail being validated
     /// @param proposedAmount The payment amount proposed for validation
@@ -51,5 +34,17 @@ contract DDOValidator is IValidator {
         });
 
         return result;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    EXTERNAL STATE-CHANGING FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Called when a rail is terminated
+    /// @param railId The ID of the rail being terminated
+    /// @param terminator The address that initiated the termination
+    /// @param endEpoch The epoch at which the rail will end
+    function railTerminated(uint256 railId, address terminator, uint256 endEpoch) external {
+        // Allow all terminations for now (don't revert)
     }
 }

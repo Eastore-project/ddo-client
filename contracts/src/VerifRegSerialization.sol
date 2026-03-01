@@ -23,7 +23,7 @@ library VerifRegSerialization {
         DDOTypes.AllocationRequest[] memory allocationRequests
     ) internal pure returns (bytes memory) {
         // Calculate capacity needed for CBOR buffer
-        uint256 capacity = 0;
+        uint256 capacity;
 
         // Top level array [allocation_requests, claim_extensions] - 2 elements
         capacity += _getPrefixSize(2);
@@ -110,7 +110,7 @@ library VerifRegSerialization {
             cborData,
             byteIdx
         );
-        if (operatorDataLength != 2) revert DDOTypes.InvalidOperatorData();
+        if (operatorDataLength != 2) revert DDOTypes.DDOTypes__InvalidOperatorData();
 
         // Deserialize allocation requests
         (allocationRequests, byteIdx) = _deserializeAllocationRequests(
@@ -188,7 +188,7 @@ library VerifRegSerialization {
         );
 
         if (allocationRequestLength != 6) {
-            revert DDOTypes.InvalidAllocationRequest();
+            revert DDOTypes.DDOTypes__InvalidAllocationRequest();
         }
 
         uint64 provider;
@@ -258,7 +258,7 @@ library VerifRegSerialization {
             );
 
             if (claimExtensionRequestLength != 3) {
-                revert DDOTypes.InvalidClaimExtensionRequest();
+                revert DDOTypes.DDOTypes__InvalidClaimExtensionRequest();
             }
 
             uint64 provider;
@@ -314,7 +314,7 @@ library VerifRegSerialization {
 
         // Read top-level array (should be 3 elements: AllocationResults, ExtensionResults, NewAllocations)
         (len, byteIdx) = CBORDecoder.readFixedArray(cborData, byteIdx);
-        require(len == 3, "Invalid response format: expected 3 elements");
+        if (len != 3) revert DDOTypes.DDOTypes__InvalidVerifregResponse();
 
         // Parse AllocationResults (CommonTypes.BatchReturn)
         (response.allocationResults, byteIdx) = _deserializeBatchReturn(
@@ -364,7 +364,7 @@ library VerifRegSerialization {
 
         // BatchReturn is an array of 2 elements: success_count, fail_codes
         (len, byteIdx) = CBORDecoder.readFixedArray(cborData, byteIdx);
-        require(len == 2, "Invalid BatchReturn format: expected 2 elements");
+        if (len != 2) revert DDOTypes.DDOTypes__InvalidBatchReturnFormat();
 
         // Read success_count (uint32)
         uint64 successCount64;
@@ -381,10 +381,7 @@ library VerifRegSerialization {
                 cborData,
                 byteIdx
             );
-            require(
-                failCodeLen == 2,
-                "Invalid FailCode format: expected 2 elements"
-            );
+            if (failCodeLen != 2) revert DDOTypes.DDOTypes__InvalidFailCodeFormat();
 
             // Read idx (uint32)
             uint64 idx64;

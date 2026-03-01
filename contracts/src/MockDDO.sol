@@ -3,14 +3,18 @@ pragma solidity ^0.8.27;
 
 import {DDOTypes} from "./DDOTypes.sol";
 import {DDOSp} from "./DDOSp.sol";
-import {IPayments} from "./IPayments.sol";
+import {FilecoinPayV1} from "filecoin-pay/FilecoinPayV1.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {VerifRegSerialization} from "./VerifRegSerialization.sol";
 
 /// @title MockDDO
 /// @notice Mock functions for DDO Client for testing purposes
 /// @dev This contract contains all mock functions that can be easily removed by removing inheritance
 abstract contract MockDDO is DDOTypes, DDOSp {
-    // TODO: Remove this function after testing
+    /*//////////////////////////////////////////////////////////////
+                    EXTERNAL STATE-CHANGING FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
     /**
      * @notice Create allocation requests without transferring DataCap (for testing)
      * @param pieceInfos Array of piece information to create allocations for
@@ -24,26 +28,28 @@ abstract contract MockDDO is DDOTypes, DDOSp {
         onlyValidPieceForSP(pieceInfos)
         returns (uint256 totalDataCap, bytes memory receiverParams)
     {
-        require(pieceInfos.length > 0, "No piece infos provided");
-        require(
-            address(paymentsContract) != address(0),
-            "Payments contract not set"
-        );
+        if (pieceInfos.length == 0) {
+            revert DDOTypes__NoPieceInfosProvided();
+        }
+        if (address(paymentsContract) == address(0)) {
+            revert DDOTypes__PaymentsContractNotSet();
+        }
 
         AllocationRequest[] memory allocationRequests = new AllocationRequest[](
             pieceInfos.length
         );
-        totalDataCap = 0;
 
         int64 currentEpoch = int64(int256(block.number));
 
-        // Create allocation requests from piece infos
-        for (uint256 i = 0; i < pieceInfos.length; i++) {
+        for (uint256 i; i < pieceInfos.length; i++) {
             PieceInfo memory info = pieceInfos[i];
 
-            // Validate piece size is reasonable (basic validation)
-            require(info.size > 0, "Invalid piece size");
-            require(info.provider > 0, "Invalid provider ID");
+            if (info.size == 0) {
+                revert DDOTypes__InvalidPieceSize();
+            }
+            if (info.provider == 0) {
+                revert DDOTypes__InvalidProviderId();
+            }
 
             int64 expiration = currentEpoch + info.expirationOffset;
 
@@ -58,16 +64,10 @@ abstract contract MockDDO is DDOTypes, DDOSp {
 
             totalDataCap += info.size;
 
-            // Create mock allocation ID for testing (block.timestamp + index)
             uint64 mockAllocationId = uint64(block.timestamp + i + 1);
 
-            // Store allocation ID for client
             allocationIdsByClient[msg.sender].push(mockAllocationId);
-
-            // Store provider mapping for this allocation
-            allocationIdToProvider[mockAllocationId] = info.provider;
-
-            // Create payment rail for this mock allocation
+            allocationIdsByProvider[info.provider].push(mockAllocationId);
             _initiatePaymentRail(info, mockAllocationId);
 
             emit AllocationCreated(
@@ -83,7 +83,6 @@ abstract contract MockDDO is DDOTypes, DDOSp {
             );
         }
 
-        // Serialize allocation requests to CBOR bytes (receiver params)
         receiverParams = VerifRegSerialization.serializeVerifregOperatorData(
             allocationRequests
         );
@@ -91,7 +90,6 @@ abstract contract MockDDO is DDOTypes, DDOSp {
         return (totalDataCap, receiverParams);
     }
 
-    // TODO: Remove this function after testing
     /**
      * @notice Create allocation requests without transferring DataCap (for testing)
      * @param pieceInfos Array of piece information to create allocations for
@@ -101,22 +99,25 @@ abstract contract MockDDO is DDOTypes, DDOSp {
     function mockCreateRawAllocationRequests(
         PieceInfo[] memory pieceInfos
     ) external returns (uint256 totalDataCap, bytes memory receiverParams) {
-        require(pieceInfos.length > 0, "No piece infos provided");
+        if (pieceInfos.length == 0) {
+            revert DDOTypes__NoPieceInfosProvided();
+        }
 
         AllocationRequest[] memory allocationRequests = new AllocationRequest[](
             pieceInfos.length
         );
-        totalDataCap = 0;
 
         int64 currentEpoch = int64(int256(block.number));
 
-        // Create allocation requests from piece infos
-        for (uint256 i = 0; i < pieceInfos.length; i++) {
+        for (uint256 i; i < pieceInfos.length; i++) {
             PieceInfo memory info = pieceInfos[i];
 
-            // Validate piece size is reasonable (basic validation)
-            require(info.size > 0, "Invalid piece size");
-            require(info.provider > 0, "Invalid provider ID");
+            if (info.size == 0) {
+                revert DDOTypes__InvalidPieceSize();
+            }
+            if (info.provider == 0) {
+                revert DDOTypes__InvalidProviderId();
+            }
 
             int64 expiration = currentEpoch + info.expirationOffset;
 
@@ -143,13 +144,65 @@ abstract contract MockDDO is DDOTypes, DDOSp {
             );
         }
 
-        // Serialize allocation requests to CBOR bytes (receiver params)
         receiverParams = VerifRegSerialization.serializeVerifregOperatorData(
             allocationRequests
         );
 
         return (totalDataCap, receiverParams);
     }
+
+    /**
+     * @notice Mock activate allocation (simulates SectorContentChanged notification)
+     * @param allocationId The allocation ID to activate
+     */
+    function mockActivateAllocation(uint64 allocationId) external {
+        AllocationInfo storage info = allocationInfos[allocationId];
+        if (info.client == address(0)) {
+            revert DDOTypes__AllocationNotFound();
+        }
+        if (info.activated) {
+            revert DDOTypes__AllocationAlreadyActivated();
+        }
+        _activatePaymentRail(allocationId);
+    }
+
+    /**
+     * @notice Mock settle storage provider payment for an allocation (for testing)
+     * @param allocationId The allocation ID to settle payment for
+     * @param untilEpoch The epoch until which to settle the rail
+     */
+    function mockSettleSpPayment(
+        uint64 allocationId,
+        uint256 untilEpoch
+    )
+        external
+        returns (
+            uint256 totalSettledAmount,
+            uint256 totalNetPayeeAmount,
+            uint256 totalOperatorCommission,
+            uint256 totalNetworkFee,
+            uint256 finalSettledEpoch,
+            string memory note
+        )
+    {
+        AllocationInfo memory info = allocationInfos[allocationId];
+        if (!info.activated) {
+            revert DDOTypes__AllocationNotActivated();
+        }
+        if (info.railId == 0) {
+            revert DDOTypes__NoRailFoundForAllocation();
+        }
+
+        if (address(paymentsContract) == address(0)) {
+            revert DDOTypes__PaymentsContractNotSet();
+        }
+
+        return paymentsContract.settleRail(info.railId, untilEpoch);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                      EXTERNAL READ-ONLY FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     /**
      * @notice Mock function to authenticate proposal by decoding bytes to string to test curio mk20
@@ -162,105 +215,16 @@ abstract contract MockDDO is DDOTypes, DDOSp {
         return abi.decode(data, (string));
     }
 
-    // TODO: Remove this function after testing
-    /**
-     * @notice Mock settle storage provider first payment for an allocation (for testing)
-     * @param allocationId The allocation ID to settle payment for
-     * @param claimSize The size of the claim (bypassing getClaimInfo)
-     * @param termStart The term start epoch from claim (bypassing getClaimInfo)
-     */
-    function mockSettleSpFirstPayment(
-        uint64 allocationId,
-        uint64 claimSize,
-        int64 termStart
-    ) external {
-        // Check if allocation exists and get provider ID
-        uint64 providerId = allocationIdToProvider[allocationId];
-        require(providerId > 0, "Allocation not found");
+    /*//////////////////////////////////////////////////////////////
+                    INTERNAL STATE-CHANGING FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
-        // Check if provider is registered
-        SPConfig memory spConfig = spConfigs[providerId];
-        if (spConfig.paymentAddress == address(0)) {
-            revert InvalidProvider();
-        }
-
-        // Get the rail ID corresponding to this allocation
-        uint256 railId = allocationIdToRailId[allocationId];
-        require(railId > 0, "No rail found for allocation");
-
-        // Check if payments contract is set
-        if (address(paymentsContract) == address(0)) {
-            revert PaymentsContractNotSet();
-        }
-
-        // Get rail details
-        IPayments.RailView memory rail = paymentsContract.getRail(railId);
-
-        // Calculate price per epoch using mock claim size
-        uint256 pricePerEpoch = this.getSPActivePricePerBytePerEpoch(
-            providerId,
-            rail.token
-        ) * claimSize;
-
-        // Check payment rate and handle accordingly
-        if (rail.paymentRate == 0) {
-            // Handle case when payment rate is 0 (settled or special state)
-            _handleZeroPaymentRate(
-                railId,
-                uint256(uint64(termStart)),
-                pricePerEpoch
-            );
-        }
-    }
-
-    // TODO: Remove this function after testing
-    /**
-     * @notice Mock settle storage provider payment for an allocation (for testing)
-     * @param allocationId The allocation ID to settle payment for
-     * @param claimSize The size of the claim (bypassing getClaimInfo)
-     * @param termStart The term start epoch from claim (bypassing getClaimInfo)
-     */
-    function mockSettleSpPayment(
-        uint64 allocationId,
-        uint64 claimSize,
-        int64 termStart,
-        uint256 untilEpoch
-    )
-        external
-        returns (
-            uint256 totalSettledAmount,
-            uint256 totalNetPayeeAmount,
-            uint256 totalPaymentFee,
-            uint256 totalOperatorCommission,
-            uint256 finalSettledEpoch,
-            string memory note
-        )
-    {
-        // First, handle the initial payment setup if needed
-        this.mockSettleSpFirstPayment(allocationId, claimSize, termStart);
-
-        // Get the rail ID for this allocation
-        uint256 railId = allocationIdToRailId[allocationId];
-        require(railId > 0, "No rail found for allocation");
-
-        // Check if payments contract is set
-        if (address(paymentsContract) == address(0)) {
-            revert PaymentsContractNotSet();
-        }
-
-        // Settle the rail up to the specified epoch
-        return paymentsContract.settleRail(railId, untilEpoch);
-    }
-
-    // Abstract function to be implemented by inheriting contracts
     function _initiatePaymentRail(
         PieceInfo memory pieceInfo,
         uint64 allocationId
     ) internal virtual returns (uint256 railId);
 
-    function _handleZeroPaymentRate(
-        uint256 railId,
-        uint256 termStart,
-        uint256 pricePerEpoch
+    function _activatePaymentRail(
+        uint64 allocationId
     ) internal virtual;
 }

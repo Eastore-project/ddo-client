@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import "./BaseTest.sol";
+import {console} from "forge-std/Test.sol";
+import {BaseTest, DDOTypes, DDOSp, FilecoinPayV1, IERC20, SimpleERC20} from "./BaseTest.sol";
 
 /**
  * @title AllocationWithPaymentsTest
@@ -27,7 +28,7 @@ contract AllocationWithPaymentsTest is BaseTest {
             uint256 initialLockupCurrent,
             ,
 
-        ) = paymentsContract.accounts(address(testToken), client1);
+        ) = paymentsContract.accounts(IERC20(address(testToken)), client1);
         console.log("Client1 initial funds:", initialFunds);
         console.log("Client1 initial lockup:", initialLockupCurrent);
 
@@ -62,14 +63,14 @@ contract AllocationWithPaymentsTest is BaseTest {
         console.log("Allocation ID:", allocationId);
 
         // Verify rail was created
-        uint256 railId = ddoClient.allocationIdToRailId(allocationId);
+        (,,,,,,uint256 railId) = ddoClient.allocationInfos(allocationId);
         console.log("Rail ID:", railId);
         assertTrue(railId > 0, "Rail should be created");
 
         // Get rail details
-        IPayments.RailView memory rail = paymentsContract.getRail(railId);
+        FilecoinPayV1.RailView memory rail = paymentsContract.getRail(railId);
         console.log("Rail details:");
-        console.log("  Token:", rail.token);
+        console.log("  Token:", address(rail.token));
         console.log("  From (client):", rail.from);
         console.log("  To (SP):", rail.to);
         console.log("  Operator (DDOClient):", rail.operator);
@@ -79,7 +80,7 @@ contract AllocationWithPaymentsTest is BaseTest {
         console.log("  Commission rate BPS:", rail.commissionRateBps);
 
         // Verify rail properties
-        assertEq(rail.token, address(testToken), "Rail token should match");
+        assertEq(address(rail.token), address(testToken), "Rail token should match");
         assertEq(rail.from, client1, "Rail from should be client1");
         assertEq(
             rail.to,
@@ -102,19 +103,17 @@ contract AllocationWithPaymentsTest is BaseTest {
             "Commission rate should match DDOClient setting"
         );
 
-        // Verify fixed lockup was set correctly
-        uint256 expectedLockup = PIECE_SIZE *
-            PRICE_PER_BYTE_PER_EPOCH *
-            ddoClient.EPOCHS_PER_MONTH();
+        // Verify fixed lockup was set correctly (anti-spam constant)
+        uint256 expectedLockup = ddoClient.allocationLockupAmount();
         assertEq(
             rail.lockupFixed,
             expectedLockup,
-            "Fixed lockup should be calculated correctly"
+            "Fixed lockup should match allocationLockupAmount"
         );
 
         // Check client's account after rail creation
         (uint256 finalFunds, uint256 finalLockupCurrent, , ) = paymentsContract
-            .accounts(address(testToken), client1);
+            .accounts(IERC20(address(testToken)), client1);
         console.log("Client1 final funds:", finalFunds);
         console.log("Client1 final lockup:", finalLockupCurrent);
 
@@ -153,7 +152,7 @@ contract AllocationWithPaymentsTest is BaseTest {
             uint256 initialLockupCurrent,
             ,
 
-        ) = paymentsContract.accounts(address(testToken), client2);
+        ) = paymentsContract.accounts(IERC20(address(testToken)), client2);
         console.log("Client2 initial funds:", initialFunds);
         console.log("Client2 initial lockup:", initialLockupCurrent);
 
@@ -185,7 +184,7 @@ contract AllocationWithPaymentsTest is BaseTest {
         uint256 totalExpectedLockup = 0;
         for (uint256 i = 0; i < allocationIds.length; i++) {
             uint64 allocationId = allocationIds[i];
-            uint256 railId = ddoClient.allocationIdToRailId(allocationId);
+            (,,,,,,uint256 railId) = ddoClient.allocationInfos(allocationId);
 
             emit log_named_uint(
                 string(
@@ -197,14 +196,14 @@ contract AllocationWithPaymentsTest is BaseTest {
             assertTrue(railId > 0, "Each allocation should have a rail");
 
             // Get rail details
-            IPayments.RailView memory rail = paymentsContract.getRail(railId);
+            FilecoinPayV1.RailView memory rail = paymentsContract.getRail(railId);
             console.log("  Rail to SP:", rail.to);
             console.log("  Fixed lockup:", rail.lockupFixed);
 
             totalExpectedLockup += rail.lockupFixed;
 
             // Verify rail goes to correct SP
-            uint64 providerId = ddoClient.allocationIdToProvider(allocationId);
+            (,uint64 providerId,,,,,) = ddoClient.allocationInfos(allocationId);
             if (providerId == SP1_ACTOR_ID) {
                 assertEq(
                     rail.to,
@@ -222,7 +221,7 @@ contract AllocationWithPaymentsTest is BaseTest {
 
         // Check final lockup
         (uint256 finalFunds, uint256 finalLockupCurrent, , ) = paymentsContract
-            .accounts(address(testToken), client2);
+            .accounts(IERC20(address(testToken)), client2);
         console.log("Client2 final funds:", finalFunds);
         console.log("Client2 final lockup:", finalLockupCurrent);
         console.log("Total expected lockup:", totalExpectedLockup);
@@ -248,7 +247,7 @@ contract AllocationWithPaymentsTest is BaseTest {
 
         // Should fail because SP is not registered
         vm.prank(client1);
-        vm.expectRevert(abi.encodeWithSignature("SPNotRegistered()"));
+        vm.expectRevert(abi.encodeWithSignature("DDOSp__SPNotRegistered()"));
         ddoClient.mockCreateAllocationRequests(pieceInfos);
     }
 
@@ -272,7 +271,7 @@ contract AllocationWithPaymentsTest is BaseTest {
 
         // Should fail because token is not supported by SP
         vm.prank(client1);
-        vm.expectRevert(abi.encodeWithSignature("TokenNotSupportedBySP()"));
+        vm.expectRevert(abi.encodeWithSignature("DDOSp__TokenNotSupportedBySP()"));
         ddoClient.mockCreateAllocationRequests(pieceInfos);
     }
 
@@ -290,10 +289,10 @@ contract AllocationWithPaymentsTest is BaseTest {
 
         vm.startPrank(poorClient);
         testToken.approve(address(paymentsContract), type(uint256).max);
-        paymentsContract.deposit(address(testToken), poorClient, 1 * 10 ** 17); // Only 0.1 tokens deposited
+        paymentsContract.deposit(IERC20(address(testToken)), poorClient, 1 * 10 ** 17); // Only 0.1 tokens deposited
 
         paymentsContract.setOperatorApproval(
-            address(testToken),
+            IERC20(address(testToken)),
             address(ddoClient),
             true,
             type(uint256).max,
@@ -310,9 +309,7 @@ contract AllocationWithPaymentsTest is BaseTest {
         DDOTypes.PieceInfo[] memory pieceInfos = new DDOTypes.PieceInfo[](1);
         pieceInfos[0] = pieceInfo;
 
-        uint256 requiredLockup = PIECE_SIZE *
-            PRICE_PER_BYTE_PER_EPOCH *
-            ddoClient.EPOCHS_PER_MONTH();
+        uint256 requiredLockup = ddoClient.allocationLockupAmount();
         console.log("Required lockup:", requiredLockup);
         emit log_named_uint("Available funds", 1 * 10 ** 17);
 
@@ -332,9 +329,6 @@ contract AllocationWithPaymentsTest is BaseTest {
         );
         DDOTypes.PieceInfo[] memory pieceInfos = new DDOTypes.PieceInfo[](1);
         pieceInfos[0] = pieceInfo;
-
-        // Note: We can't call mockCreateAllocationRequests in a view function due to state changes
-        // So we'll test the serialization components directly
 
         // Test allocation request creation
         int64 currentEpoch = int64(int256(block.number));

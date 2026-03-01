@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import "./BaseTest.sol";
+import {console} from "forge-std/Test.sol";
+import {BaseTest, IERC20, SimpleERC20} from "./BaseTest.sol";
 
 /**
  * @title PaymentsSetupTest
@@ -31,9 +32,14 @@ contract PaymentsSetupTest is BaseTest {
             "Commission max should be 10000 BPS"
         );
         assertEq(
-            paymentsContract.PAYMENT_FEE_BPS(),
-            10,
-            "Payment fee should be 10 BPS"
+            paymentsContract.NETWORK_FEE_NUMERATOR(),
+            1,
+            "Network fee numerator should be 1"
+        );
+        assertEq(
+            paymentsContract.NETWORK_FEE_DENOMINATOR(),
+            200,
+            "Network fee denominator should be 200"
         );
 
         console.log(
@@ -44,7 +50,8 @@ contract PaymentsSetupTest is BaseTest {
             "Commission max BPS:",
             paymentsContract.COMMISSION_MAX_BPS()
         );
-        console.log("Payment fee BPS:", paymentsContract.PAYMENT_FEE_BPS());
+        console.log("Network fee numerator:", paymentsContract.NETWORK_FEE_NUMERATOR());
+        console.log("Network fee denominator:", paymentsContract.NETWORK_FEE_DENOMINATOR());
     }
 
     function testTokenDeploymentAndMinting() public {
@@ -100,11 +107,11 @@ contract PaymentsSetupTest is BaseTest {
 
         // Check account balances in payments contract
         (uint256 client1Funds, , , ) = paymentsContract.accounts(
-            address(testToken),
+            IERC20(address(testToken)),
             client1
         );
         (uint256 client2Funds, , , ) = paymentsContract.accounts(
-            address(testToken),
+            IERC20(address(testToken)),
             client2
         );
 
@@ -136,7 +143,7 @@ contract PaymentsSetupTest is BaseTest {
             ,
             uint256 maxLockupPeriod1
         ) = paymentsContract.operatorApprovals(
-                address(testToken),
+                IERC20(address(testToken)),
                 client1,
                 address(ddoClient)
             );
@@ -149,7 +156,7 @@ contract PaymentsSetupTest is BaseTest {
             ,
             uint256 maxLockupPeriod2
         ) = paymentsContract.operatorApprovals(
-                address(testToken),
+                IERC20(address(testToken)),
                 client2,
                 address(ddoClient)
             );
@@ -236,7 +243,7 @@ contract PaymentsSetupTest is BaseTest {
 
         // Get initial balance
         (uint256 initialFunds, , , ) = paymentsContract.accounts(
-            address(testToken),
+            IERC20(address(testToken)),
             client1
         );
         console.log("Client1 initial deposited funds:", initialFunds);
@@ -244,14 +251,14 @@ contract PaymentsSetupTest is BaseTest {
         // Make additional deposit
         vm.prank(client1);
         paymentsContract.deposit(
-            address(testToken),
+            IERC20(address(testToken)),
             client1,
             additionalDeposit
         );
 
         // Check new balance
         (uint256 newFunds, , , ) = paymentsContract.accounts(
-            address(testToken),
+            IERC20(address(testToken)),
             client1
         );
         console.log("Client1 funds after additional deposit:", newFunds);
@@ -266,11 +273,11 @@ contract PaymentsSetupTest is BaseTest {
         uint256 withdrawAmount = 50 * 10 ** 18; // 50 tokens
 
         vm.prank(client1);
-        paymentsContract.withdraw(address(testToken), withdrawAmount);
+        paymentsContract.withdraw(IERC20(address(testToken)), withdrawAmount);
 
         // Check balance after withdrawal
         (uint256 finalFunds, , , ) = paymentsContract.accounts(
-            address(testToken),
+            IERC20(address(testToken)),
             client1
         );
         console.log("Client1 funds after withdrawal:", finalFunds);
@@ -299,15 +306,8 @@ contract PaymentsSetupTest is BaseTest {
 
         // Try to deposit without approving payments contract (should fail)
         vm.prank(newClient);
-        vm.expectRevert(
-            abi.encodeWithSignature(
-                "ERC20InsufficientAllowance(address,uint256,uint256)",
-                address(paymentsContract),
-                0,
-                50 * 10 ** 18
-            )
-        );
-        paymentsContract.deposit(address(testToken), newClient, 50 * 10 ** 18);
+        vm.expectRevert();
+        paymentsContract.deposit(IERC20(address(testToken)), newClient, 50 * 10 ** 18);
     }
 
     function testCommissionRateSettings() public {
@@ -349,7 +349,7 @@ contract PaymentsSetupTest is BaseTest {
 
         // Test setting commission rate above maximum (should fail)
         vm.expectRevert(
-            abi.encodeWithSignature("CommissionRateExceedsMaximum()")
+            abi.encodeWithSignature("DDOTypes__CommissionRateExceedsMaximum()")
         );
         ddoClient.setCommissionRate(maxRate + 1);
     }

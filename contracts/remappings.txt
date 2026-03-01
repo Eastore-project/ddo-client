@@ -1,1 +1,9 @@
-@ensdomains/buffer=lib/buffer/contracts
+@ensdomains/buffer/=lib/buffer/
+filecoin-pay/=lib/filecoin-pay/src/
+lib/filecoin-solidity/=lib/filecoin-solidity/
+lib/openzeppelin-contracts/=lib/openzeppelin-contracts/
+lib/openzeppelin-contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/
+forge-std/=lib/forge-std/src/
+@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
+solidity-cborutils/=lib/filecoin-solidity/lib/solidity-cborutils/
+src/=src/

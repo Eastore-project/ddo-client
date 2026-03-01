@@ -2,8 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {Payments} from "../src/Payments.sol";
+import {FilecoinPayV1} from "filecoin-pay/FilecoinPayV1.sol";
 import {DDOClient} from "../src/DDOClient.sol";
 
 contract DeployAllScript is Script {
@@ -14,34 +13,14 @@ contract DeployAllScript is Script {
         console.log("Deployer address:", msg.sender);
         console.log("");
 
-        // 1. Deploy Payments Contract (with UUPS proxy)
-        console.log("1. Deploying Payments Contract...");
+        // 1. Deploy Payments Contract (direct, no proxy)
+        console.log("1. Deploying FilecoinPayV1 Contract...");
 
-        // Deploy the implementation contract
-        Payments paymentsImpl = new Payments();
+        FilecoinPayV1 paymentsContract = new FilecoinPayV1();
         console.log(
-            "Payments implementation deployed at:",
-            address(paymentsImpl)
+            "FilecoinPayV1 deployed at:",
+            address(paymentsContract)
         );
-
-        // Prepare initialization data
-        bytes memory initData = abi.encodeWithSelector(
-            Payments.initialize.selector
-        );
-
-        // Deploy the ERC1967 proxy with the implementation and initialization data
-        ERC1967Proxy paymentsProxy = new ERC1967Proxy(
-            address(paymentsImpl),
-            initData
-        );
-        console.log("Payments proxy deployed at:", address(paymentsProxy));
-
-        // Cast proxy to Payments interface
-        Payments paymentsContract = Payments(address(paymentsProxy));
-
-        // Verify the proxy is working
-        address paymentsOwner = paymentsContract.owner();
-        console.log("Payments contract owner:", paymentsOwner);
         console.log("");
 
         // 2. Deploy DDOClient Contract
@@ -52,7 +31,7 @@ contract DeployAllScript is Script {
 
         // 3. Connect DDOClient to Payments Contract
         console.log("3. Connecting DDOClient to Payments Contract...");
-        ddoClient.setPaymentsContract(address(paymentsProxy));
+        ddoClient.setPaymentsContract(address(paymentsContract));
         console.log("DDOClient successfully connected to Payments contract");
         console.log("");
 
@@ -60,13 +39,10 @@ contract DeployAllScript is Script {
 
         // 4. Final Summary
         console.log("=== DEPLOYMENT COMPLETE ===");
-        console.log("Payments Implementation:", address(paymentsImpl));
-        console.log("Payments Proxy (USE THIS):", address(paymentsProxy));
+        console.log("FilecoinPayV1:", address(paymentsContract));
         console.log("DDOClient:", address(ddoClient));
         console.log("Deployer/Owner:", msg.sender);
         console.log("");
         console.log("All contracts deployed and connected successfully!");
-        console.log("Use the Payments PROXY address for all interactions:");
-        console.log("Proxy Address:", address(paymentsProxy));
     }
 }
