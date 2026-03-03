@@ -73,13 +73,14 @@ func (c *Client) SettleSpPayment(allocationId uint64, untilEpoch *big.Int) (stri
 	return tx.Hash().Hex(), nil
 }
 
-// SettleSpTotalPayment settles storage provider payment for all allocations of a provider
-func (c *Client) SettleSpTotalPayment(providerId uint64, untilEpoch *big.Int) (string, error) {
+// SettleSpTotalPayment settles storage provider payment for all allocations of a provider.
+// startIndex and batchSize support pagination; pass 0 for batchSize to settle all.
+func (c *Client) SettleSpTotalPayment(providerId uint64, untilEpoch *big.Int, startIndex *big.Int, batchSize *big.Int) (string, error) {
 	if c.auth == nil {
 		return "", fmt.Errorf("client not configured for transactions (no private key)")
 	}
 
-	tx, err := c.contract.Transact(c.auth, "settleSpTotalPayment", providerId, untilEpoch)
+	tx, err := c.contract.Transact(c.auth, "settleSpTotalPayment", providerId, untilEpoch, startIndex, batchSize)
 	if err != nil {
 		return "", fmt.Errorf("failed to call settleSpTotalPayment: %w", err)
 	}

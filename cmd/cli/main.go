@@ -8,6 +8,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"ddo-client/internal/commands"
+	"ddo-client/internal/commands/admin"
 	"ddo-client/internal/commands/allocations"
 	"ddo-client/internal/commands/payments"
 	"ddo-client/internal/commands/sp"
@@ -42,8 +43,8 @@ func main() {
 			allocations.AllocationsCommand(),
 			payments.PaymentsCommand(),
 			sp.SPCommand(),
+			admin.AdminCommand(),
 			commands.ApproveTokenCommand(),
-			// Future commands will be added here
 		},
 	}
 

@@ -1,12 +1,14 @@
 package ddo
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"reflect"
 
 	"ddo-client/internal/types"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -59,18 +61,6 @@ func (c *Client) GetAllocationIdsForClient(clientAddress string) ([]uint64, erro
 	return []uint64{}, fmt.Errorf("unexpected result type: %T", result[0])
 }
 
-// GetAllocationCountForClient gets the number of allocations for a specific client address
-// Uses the length of the public allocationIdsByClient mapping
-func (c *Client) GetAllocationCountForClient(clientAddress string) (*big.Int, error) {
-	// Get the allocation IDs and return the count
-	allocationIds, err := c.GetAllocationIdsForClient(clientAddress)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get allocation IDs: %w", err)
-	}
-
-	return big.NewInt(int64(len(allocationIds))), nil
-}
-
 // GetAllocationIdsForProvider gets all allocation IDs for a specific provider
 // Uses the getAllocationIdsForProvider getter function
 func (c *Client) GetAllocationIdsForProvider(providerId uint64) ([]uint64, error) {
@@ -107,60 +97,32 @@ func (c *Client) GetAllocationIdsForProvider(providerId uint64) ([]uint64, error
 	return []uint64{}, fmt.Errorf("unexpected result type: %T", result[0])
 }
 
-// GetProviderForAllocation gets the provider ID for a specific allocation
-// Uses the public allocationIdToProvider mapping
-func (c *Client) GetProviderForAllocation(allocationId uint64) (uint64, error) {
+// GetAllocationInfo queries the allocationInfos mapping for a specific allocation ID
+func (c *Client) GetAllocationInfo(allocationId uint64) (*types.AllocationInfo, error) {
 	var result []interface{}
-	
-	// Use the public mapping getter directly
-	err := c.contract.Call(nil, &result, "allocationIdToProvider", allocationId)
+	err := c.contract.Call(&bind.CallOpts{Context: context.Background()}, &result, "allocationInfos", allocationId)
 	if err != nil {
-		return 0, fmt.Errorf("failed to call allocationIdToProvider: %w", err)
+		return nil, fmt.Errorf("failed to call allocationInfos: %w", err)
 	}
 
-	if len(result) == 0 {
-		return 0, nil
+	// allocationInfos returns 9 individual values (not a struct tuple)
+	if len(result) < 9 {
+		return nil, fmt.Errorf("unexpected number of results from allocationInfos: %d", len(result))
 	}
 
-	// Convert result to uint64
-	if providerId, ok := result[0].(uint64); ok {
-		return providerId, nil
+	info := &types.AllocationInfo{
+		Client:               result[0].(common.Address),
+		Provider:             result[1].(uint64),
+		Activated:            result[2].(bool),
+		PieceCidHash:         result[3].([32]byte),
+		PaymentToken:         result[4].(common.Address),
+		PieceSize:            result[5].(uint64),
+		RailId:               result[6].(*big.Int),
+		PricePerBytePerEpoch: result[7].(*big.Int),
+		SectorNumber:         result[8].(uint64),
 	}
 
-	// Handle case where it might be returned as *big.Int
-	if providerId, ok := result[0].(*big.Int); ok {
-		return providerId.Uint64(), nil
-	}
-
-	return 0, fmt.Errorf("unexpected result type: %T", result[0])
-}
-
-// GetRailIdForAllocation gets the rail ID for a specific allocation
-// Uses the public allocationIdToRailId mapping
-func (c *Client) GetRailIdForAllocation(allocationId uint64) (*big.Int, error) {
-	var result []interface{}
-	
-	// Use the public mapping getter directly
-	err := c.contract.Call(nil, &result, "allocationIdToRailId", allocationId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to call allocationIdToRailId: %w", err)
-	}
-
-	if len(result) == 0 {
-		return big.NewInt(0), nil
-	}
-
-	// Convert result to *big.Int
-	if railId, ok := result[0].(*big.Int); ok {
-		return railId, nil
-	}
-
-	// Handle case where it might be returned as uint64
-	if railId, ok := result[0].(uint64); ok {
-		return big.NewInt(int64(railId)), nil
-	}
-
-	return big.NewInt(0), fmt.Errorf("unexpected result type: %T", result[0])
+	return info, nil
 }
 
 // Legacy function kept for backwards compatibility

@@ -10,9 +10,12 @@ func SPCommand() *cli.Command {
 		Aliases: []string{"storage-provider"},
 		Usage:   "Storage provider management commands",
 		Subcommands: []*cli.Command{
+			ListCommand(),
 			RegisterCommand(),
 			UpdateCommand(),
 			QueryCommand(),
+			DeactivateCommand(),
+			RemoveTokenCommand(),
 			SettleCommand(),
 		},
 	}

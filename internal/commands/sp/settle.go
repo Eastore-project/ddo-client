@@ -126,11 +126,11 @@ func executeSettle(c *cli.Context) error {
 	targetProviderId := providerId
 	if allocationId > 0 {
 		// Get provider ID from allocation
-		_, providerIdFromAllocation, _, err := ddoClient.GetAllocationRailInfo(allocationId)
+		allocInfo, err := ddoClient.GetAllocationInfo(allocationId)
 		if err != nil {
-			return fmt.Errorf("failed to get allocation rail info: %v", err)
+			return fmt.Errorf("failed to get allocation info: %v", err)
 		}
-		targetProviderId = providerIdFromAllocation
+		targetProviderId = allocInfo.Provider
 	}
 
 	// Get SP configuration to find payment address and supported tokens
@@ -145,8 +145,7 @@ func executeSettle(c *cli.Context) error {
 
 	// Get payments contract address
 	var paymentsContractAddr common.Address
-	paymentsContractStr := c.String("payments-contract"); 
-	fmt.Println("payments contract string is" , paymentsContractStr)
+	paymentsContractStr := c.String("payments-contract")
 	if paymentsContractStr != "" {
 		paymentsContractAddr = common.HexToAddress(paymentsContractStr)
 		fmt.Printf("Using provided payments contract address: %s\n", paymentsContractAddr.Hex())
@@ -274,32 +273,70 @@ func executeSettle(c *cli.Context) error {
 			return fmt.Errorf("failed to settle SP payment for allocation %d: %v", allocationId, err)
 		}
 		
-		fmt.Printf("✅ Settlement transaction successful!\n")
 		fmt.Printf("Transaction Hash: %s\n", txHash)
-	} else {
-		// Settle all allocations for provider
-		fmt.Printf("💰 Settling payments for all allocations of provider %d until epoch %d...\n", providerId, untilEpoch)
-		
-		txHash, err = ddoClient.SettleSpTotalPayment(providerId, new(big.Int).SetUint64(untilEpoch))
-		if err != nil {
-			return fmt.Errorf("failed to settle total SP payments for provider %d: %v", providerId, err)
-		}
-		
-		fmt.Printf("✅ Total settlement transaction successful!\n")
-		fmt.Printf("Transaction Hash: %s\n", txHash)
-	}
 
-	// Wait for transaction to be mined
-	fmt.Printf("⏳ Waiting for settlement transaction to be mined...\n")
-	ethClient, err := ethclient.Dial(config.RPCEndpoint)
-	if err != nil {
-		fmt.Printf("⚠️  Warning: failed to create eth client for transaction wait: %v\n", err)
+		fmt.Printf("⏳ Waiting for settlement transaction to be mined...\n")
+		if err := utils.WaitForTransaction(ddoClient.GetEthClient(), txHash); err != nil {
+			return fmt.Errorf("settlement transaction failed: %v", err)
+		}
+		fmt.Printf("✅ Settlement transaction mined successfully!\n")
 	} else {
-		defer ethClient.Close()
-		if err := utils.WaitForTransaction(ethClient, txHash); err != nil {
-			fmt.Printf("⚠️  Warning: settlement transaction may not have been mined: %v\n", err)
-		} else {
-			fmt.Printf("✅ Settlement transaction mined successfully\n")
+		// Try settling all at once first
+		settleEpoch := new(big.Int).SetUint64(untilEpoch)
+		fmt.Printf("💰 Settling payments for all allocations of provider %d until epoch %d...\n", providerId, untilEpoch)
+
+		txHash, err = ddoClient.SettleSpTotalPayment(providerId, settleEpoch, big.NewInt(0), big.NewInt(0))
+		if err == nil {
+			fmt.Printf("Transaction Hash: %s\n", txHash)
+			fmt.Printf("⏳ Waiting for transaction to be mined...\n")
+			if waitErr := utils.WaitForTransaction(ddoClient.GetEthClient(), txHash); waitErr == nil {
+				fmt.Printf("✅ All allocations settled in a single transaction!\n")
+			} else {
+				fmt.Printf("⚠️  Transaction reverted, falling back to batched settlement...\n")
+				err = waitErr // trigger fallback
+			}
+		}
+
+		if err != nil {
+			// Fallback: settle in batches of 50
+			const batchSize uint64 = 50
+
+			allocationIds, err := ddoClient.GetAllocationIdsForProvider(providerId)
+			if err != nil {
+				return fmt.Errorf("failed to get allocation IDs for provider: %v", err)
+			}
+
+			total := uint64(len(allocationIds))
+			fmt.Printf("💰 Settling in batches of %d (%d total allocations)...\n", batchSize, total)
+
+			txCount := 0
+			for startIndex := uint64(0); startIndex < total; startIndex += batchSize {
+				remaining := total - startIndex
+				currentBatch := batchSize
+				if remaining < batchSize {
+					currentBatch = remaining
+				}
+
+				fmt.Printf("   Batch %d-%d of %d...\n", startIndex+1, startIndex+currentBatch, total)
+
+				batchTxHash, err := ddoClient.SettleSpTotalPayment(
+					providerId, settleEpoch,
+					new(big.Int).SetUint64(startIndex),
+					new(big.Int).SetUint64(batchSize),
+				)
+				if err != nil {
+					return fmt.Errorf("failed to settle batch starting at index %d: %v", startIndex, err)
+				}
+
+				fmt.Printf("   Transaction Hash: %s\n", batchTxHash)
+				txCount++
+
+				if err := utils.WaitForTransaction(ddoClient.GetEthClient(), batchTxHash); err != nil {
+					return fmt.Errorf("batch transaction failed: %v", err)
+				}
+			}
+
+			fmt.Printf("✅ All %d allocations settled in %d transaction(s)!\n", total, txCount)
 		}
 	}
 	fmt.Println()

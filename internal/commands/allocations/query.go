@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/urfave/cli/v2"
 
 	"ddo-client/internal/config"
@@ -100,27 +101,45 @@ func executeQuery(c *cli.Context) error {
 
 	if allocationId != 0 {
 		// Query specific allocation details
-		fmt.Printf("🔍 Querying allocation details for ID: %d\n", allocationId)
-		
-		// Get allocation rail info (includes provider ID, rail ID, and rail details)
+		fmt.Printf("Querying allocation details for ID: %d\n\n", allocationId)
+
+		// Get allocation info (sectorNumber, activated, etc.)
+		allocInfo, err := client.GetAllocationInfo(allocationId)
+		if err != nil {
+			return fmt.Errorf("failed to get allocation info: %v", err)
+		}
+
+		if allocInfo.Client == (common.Address{}) {
+			fmt.Printf("Allocation %d not found\n", allocationId)
+			return nil
+		}
+
+		fmt.Printf("Allocation Info:\n")
+		fmt.Printf("   Client: %s\n", allocInfo.Client.Hex())
+		fmt.Printf("   Provider: %d\n", allocInfo.Provider)
+		fmt.Printf("   Activated: %v\n", allocInfo.Activated)
+		fmt.Printf("   Payment Token: %s\n", allocInfo.PaymentToken.Hex())
+		fmt.Printf("   Piece Size: %d bytes\n", allocInfo.PieceSize)
+		fmt.Printf("   Price Per Byte Per Epoch: %s\n", allocInfo.PricePerBytePerEpoch.String())
+		if allocInfo.Activated {
+			fmt.Printf("   Sector Number: %d\n", allocInfo.SectorNumber)
+		} else {
+			fmt.Printf("   Sector Number: pending (not yet activated)\n")
+		}
+		fmt.Printf("   Rail ID: %s\n", allocInfo.RailId.String())
+		fmt.Println()
+
+		// Get rail info
 		railId, providerId, railView, err := client.GetAllocationRailInfo(allocationId)
 		if err != nil {
 			return fmt.Errorf("failed to get allocation rail info: %v", err)
 		}
-		
-		if providerId == 0 {
-			fmt.Printf("❌ Allocation %d not found\n", allocationId)
-			return nil
-		}
 
-		fmt.Printf("📊 Allocation Details:\n")
-		fmt.Printf("   Allocation ID: %d\n", allocationId)
-		fmt.Printf("   Provider ID: %d\n", providerId)
-		fmt.Printf("   Rail ID: %d\n", railId)
-		fmt.Println()
+		_ = providerId // already shown from allocInfo
+		_ = railId     // already shown from allocInfo
 
 		if railView != nil {
-			fmt.Printf("🚄 Rail Information:\n")
+			fmt.Printf("Rail Information:\n")
 			fmt.Printf("   Token: %s\n", railView.Token.Hex())
 			fmt.Printf("   From (Payer): %s\n", railView.From.Hex())
 			fmt.Printf("   To (Payee): %s\n", railView.To.Hex())
@@ -139,32 +158,19 @@ func executeQuery(c *cli.Context) error {
 		// Query allocations for client
 		fmt.Printf("🔍 Querying allocations for client: %s\n", clientAddress)
 
-		if countOnly {
-			// Get only the count
-			count, err := client.GetAllocationCountForClient(clientAddress)
-			if err != nil {
-				return fmt.Errorf("failed to get allocation count: %v", err)
-			}
+		allocationIds, err := client.GetAllocationIdsForClient(clientAddress)
+		if err != nil {
+			return fmt.Errorf("failed to get allocation IDs: %v", err)
+		}
 
-			fmt.Printf("📊 Results:\n")
-			fmt.Printf("Total allocations: %s\n", count.String())
-		} else {
-			// Get all allocation IDs
-			allocationIds, err := client.GetAllocationIdsForClient(clientAddress)
-			if err != nil {
-				return fmt.Errorf("failed to get allocation IDs: %v", err)
-			}
+		fmt.Printf("Total allocations: %d\n", len(allocationIds))
 
-			fmt.Printf("📊 Results:\n")
-			fmt.Printf("Total allocations: %d\n", len(allocationIds))
-
-			if len(allocationIds) == 0 {
-				fmt.Printf("No allocations found for this client.\n")
-			} else {
-				fmt.Printf("\nAllocation IDs:\n")
-				for i, id := range allocationIds {
-					fmt.Printf("  %d: %d\n", i+1, id)
-				}
+		if len(allocationIds) == 0 {
+			fmt.Printf("No allocations found for this client.\n")
+		} else if !countOnly {
+			fmt.Printf("\nAllocation IDs:\n")
+			for i, id := range allocationIds {
+				fmt.Printf("  %d: %d\n", i+1, id)
 			}
 		}
 	} else if providerId != 0 {

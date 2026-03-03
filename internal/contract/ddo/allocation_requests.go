@@ -4,12 +4,16 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"strings"
 
-	"ddo-client/internal/types"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/core/types"
+
+	ddotypes "ddo-client/internal/types"
 )
 
 // CreateAllocationRequests creates allocation requests on the contract
-func (c *Client) CreateAllocationRequests(pieceInfos []types.PieceInfo) (string, error) {
+func (c *Client) CreateAllocationRequests(pieceInfos []ddotypes.PieceInfo) (string, error) {
 	c.auth.Context = context.Background()
 
 	tx, err := c.contract.Transact(c.auth, "createAllocationRequests", pieceInfos)
@@ -20,44 +24,45 @@ func (c *Client) CreateAllocationRequests(pieceInfos []types.PieceInfo) (string,
 	return tx.Hash().Hex(), nil
 }
 
-// CreateSingleAllocationRequest creates a single allocation request
-func (c *Client) CreateSingleAllocationRequest(pieceInfo types.PieceInfo) (string, error) {
-	c.auth.Context = context.Background()
+// allocationCreatedEventID holds the parsed AllocationCreated event from the ABI.
+var allocationCreatedEventID abi.Event
 
-	tx, err := c.contract.Transact(c.auth, "createSingleAllocationRequest",
-		pieceInfo.PieceCid,
-		pieceInfo.Size,
-		pieceInfo.Provider,
-		pieceInfo.TermMin,
-		pieceInfo.TermMax,
-		pieceInfo.ExpirationOffset,
-		pieceInfo.DownloadURL,
-		pieceInfo.PaymentTokenAddress,
-	)
+func init() {
+	parsedABI, err := abi.JSON(strings.NewReader(DDOClientABI))
 	if err != nil {
-		return "", fmt.Errorf("failed to send transaction: %w", err)
+		panic(fmt.Sprintf("failed to parse ABI for events: %v", err))
 	}
-
-	return tx.Hash().Hex(), nil
+	event, ok := parsedABI.Events["AllocationCreated"]
+	if !ok {
+		panic("AllocationCreated event not found in ABI")
+	}
+	allocationCreatedEventID = event
 }
 
-// CalculateTotalDataCap calculates the total DataCap needed without sending transaction
-func (c *Client) CalculateTotalDataCap(pieceInfos []types.PieceInfo) (*big.Int, error) {
-	var result []interface{}
-	
-	err := c.contract.Call(nil, &result, "calculateTotalDataCap", pieceInfos)
-	if err != nil {
-		return nil, fmt.Errorf("failed to call contract: %w", err)
+// ParseAllocationCreatedEvents extracts allocation IDs from AllocationCreated event logs
+// in a transaction receipt. The allocationId is the second indexed parameter (topic[2]).
+func ParseAllocationCreatedEvents(receipt *types.Receipt) ([]uint64, error) {
+	var allocationIDs []uint64
+
+	eventSigHash := allocationCreatedEventID.ID
+
+	for _, log := range receipt.Logs {
+		if len(log.Topics) < 3 {
+			continue
+		}
+		if log.Topics[0] != eventSigHash {
+			continue
+		}
+
+		// topic[1] = client (address, indexed)
+		// topic[2] = allocationId (uint64, indexed)
+		allocationIdBig := new(big.Int).SetBytes(log.Topics[2].Bytes())
+		allocationIDs = append(allocationIDs, allocationIdBig.Uint64())
 	}
 
-	if len(result) == 0 {
-		return big.NewInt(0), nil
+	if len(allocationIDs) == 0 {
+		return nil, fmt.Errorf("no AllocationCreated events found in transaction receipt")
 	}
 
-	// Convert result to big.Int
-	if totalDataCap, ok := result[0].(*big.Int); ok {
-		return totalDataCap, nil
-	}
-
-	return big.NewInt(0), fmt.Errorf("unexpected result type")
-} 
+	return allocationIDs, nil
+}

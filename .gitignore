@@ -21,3 +21,7 @@ plans/
 shell/
 temp/
 broadcast/
+cli 
+ddo-cli
+docs/
+.DS_Store

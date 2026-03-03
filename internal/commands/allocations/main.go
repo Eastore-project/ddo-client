@@ -11,7 +11,6 @@ func AllocationsCommand() *cli.Command {
 		Usage:   "Allocation management commands",
 		Subcommands: []*cli.Command{
 			QueryCommand(),
-			CreateCommand(),
 			CreateFromFileCommand(),
 			QueryClaimInfoCommand(),
 		},

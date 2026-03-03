@@ -1,66 +1,82 @@
-## Foundry
+# DDO Contracts
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+Solidity smart contracts implementing the DDO protocol using the **Diamond proxy pattern (EIP-2535)**. Built with [Foundry](https://book.getfoundry.sh/).
 
-Foundry consists of:
+## Architecture
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+The DDO contract is a Diamond proxy where each function selector maps independently to a facet address. This allows atomic upgrades of individual facets without redeploying the contract or losing state.
 
-## Documentation
+### Facets
 
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
+```
+src/diamond/facets/
+├── AdminFacet.sol           # Owner-only: payments contract, commission, lockup config
+├── AllocationFacet.sol      # Create allocations, settle payments, Filecoin actor callbacks
+├── SPFacet.sol              # SP registration, pricing, token management, queries
+├── ViewFacet.sol            # Read-only: allocation queries, claim info, deal verification
+├── ValidatorFacet.sol       # Payment validation logic
+├── DiamondCutFacet.sol      # diamondCut() — add/replace/remove selectors
+├── DiamondLoupeFacet.sol    # Diamond introspection (facets, selectors, addresses)
+├── OwnershipFacet.sol       # transferOwnership, owner
+└── mock/
+    └── MockAllocationFacet.sol  # Test variant with mock miner behavior
 ```
 
-### Test
+### Libraries
 
-```shell
-$ forge test
+| Library | Purpose |
+|---|---|
+| `LibDDOStorage.sol` | Diamond storage slot, all shared state, types, events, errors, constants |
+| `LibDiamond.sol` | Diamond storage struct, internal cut logic, ownership |
+| `VerifRegSerializationDiamond.sol` | CBOR serialization for Filecoin VerifReg actor calls |
+
+### Scripts
+
+| Script | Purpose |
+|---|---|
+| `DeployDiamond.s.sol` | Full Diamond deployment: cut facet, proxy, all facets, initialization |
+| `DeployPayments.s.sol` | Deploy Payments contract (UUPS proxy) |
+
+## Build
+
+```bash
+forge build
 ```
 
-### Format
+## Test
 
-```shell
-$ forge fmt
+```bash
+# All tests
+forge test
+
+# Verbose
+forge test -vvv
+
+# Specific file
+forge test --match-path test/diamond/DiamondAllocationTest.sol
+
+# Specific function
+forge test --match-test testCreateAllocation
 ```
 
-### Gas Snapshots
+## Deploy
 
-```shell
-$ forge snapshot
+Deployment uses Foundry keystore for secure key management. Auth is handled via CLI flags (`--account`, `--private-key`, or `--keystore`).
+
+```bash
+# Set env vars
+export DEPLOYER_ADDRESS="0x..."
+export PAYMENTS_CONTRACT_ADDRESS="0x..."
+
+# Deploy Diamond (using keystore)
+forge script script/DeployDiamond.s.sol \
+  --rpc-url $RPC_URL --account <keystore-name> --broadcast --slow --gas-estimate-multiplier 100000
+
+# Verify on Blockscout (after deployment)
+forge verify-contract <ADDRESS> src/diamond/Diamond.sol:Diamond \
+  --verifier blockscout --verifier-url https://filecoin.blockscout.com/api/
 ```
 
-### Anvil
+> **Note:** Filecoin requires much higher gas estimates than Ethereum due to on-chain message storage costs. The `--gas-estimate-multiplier 100000` (1000x) accounts for this.
 
-```shell
-$ anvil
-```
 
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```

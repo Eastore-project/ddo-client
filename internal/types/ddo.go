@@ -58,6 +58,19 @@ type SPConfig struct {
 	IsActive         bool           `json:"isActive"`
 }
 
+// AllocationInfo represents on-chain allocation state from the DDO contract
+type AllocationInfo struct {
+	Client               common.Address `json:"client"`
+	Provider             uint64         `json:"provider"`
+	Activated            bool           `json:"activated"`
+	PieceCidHash         [32]byte       `json:"pieceCidHash"`
+	PaymentToken         common.Address `json:"paymentToken"`
+	PieceSize            uint64         `json:"pieceSize"`
+	RailId               *big.Int       `json:"railId"`
+	PricePerBytePerEpoch *big.Int       `json:"pricePerBytePerEpoch"`
+	SectorNumber         uint64         `json:"sectorNumber"`
+}
+
 // SPRegistrationParams contains all parameters needed for SP registration
 type SPRegistrationParams struct {
 	ActorId        uint64        `json:"actorId"`

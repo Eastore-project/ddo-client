@@ -1,11 +1,15 @@
 module ddo-client
 
-go 1.22.7
+go 1.23
 
 require (
 	github.com/eastore-project/fildeal v0.0.0-20250221113520-1d38a6c5b408
 	github.com/ethereum/go-ethereum v1.13.5
-	github.com/ipfs/go-cid v0.4.1
+	github.com/filecoin-project/go-address v1.2.0
+	github.com/filecoin-project/go-fil-commcid v0.3.1
+	github.com/ipfs/go-cid v0.5.0
+	github.com/multiformats/go-multiaddr v0.14.0
+	github.com/oklog/ulid/v2 v2.1.1
 	github.com/urfave/cli/v2 v2.27.5
 )
 
@@ -24,7 +28,6 @@ require (
 	github.com/deckarep/golang-set/v2 v2.1.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
 	github.com/ethereum/c-kzg-4844 v0.4.0 // indirect
-	github.com/filecoin-project/go-fil-commcid v0.1.0 // indirect
 	github.com/filecoin-project/go-fil-commp-hashhash v0.2.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/gammazero/deque v1.0.0 // indirect
@@ -73,6 +76,7 @@ require (
 	github.com/multiformats/go-base32 v0.1.0 // indirect
 	github.com/multiformats/go-base36 v0.2.0 // indirect
 	github.com/multiformats/go-multibase v0.2.0 // indirect
+	github.com/multiformats/go-multicodec v0.9.2 // indirect
 	github.com/multiformats/go-multihash v0.2.3 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect

@@ -7,3 +7,4 @@ forge-std/=lib/forge-std/src/
 @openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
 solidity-cborutils/=lib/filecoin-solidity/lib/solidity-cborutils/
 src/=src/
+fvm-solidity/=lib/filecoin-pay/lib/fvm-solidity/src/

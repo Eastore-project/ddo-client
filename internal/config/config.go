@@ -4,10 +4,10 @@ import "os"
 
 // Global configuration variables
 var (
-	RPCEndpoint            string
-	ContractAddress        string
+	RPCEndpoint             string
+	ContractAddress         string
 	PaymentsContractAddress string
-	PrivateKey             string
+	PrivateKey              string
 )
 
 // LoadFromEnv loads configuration from environment variables with defaults

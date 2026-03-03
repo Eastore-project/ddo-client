@@ -8,654 +8,389 @@ DDO (Decentralized Data Orchestration) Client provides a streamlined approach to
 
 ## Key Features
 
-- 🔧 **Customizable SLAs and logic** through smart contract configuration
-- 💰 **Stablecoin and native payments** support for flexible payment options
-- 🚀 **Monthly payment rails** directly between clients and storage providers
-- ⛽ **Reduced gas costs** compared to traditional F05 market deals
-- 🖥️ **Comprehensive CLI** for seamless interaction with the protocol
-- 📋 **Automated deal management** with configurable terms and conditions
-- 🔄 **Direct provider-client settlements** without intermediary market overhead
+- **Customizable SLAs and logic** through smart contract configuration
+- **Stablecoin and native payments** support for flexible payment options
+- **Monthly payment rails** directly between clients and storage providers
+- **Reduced gas costs** compared to traditional F05 market deals
+- **Diamond proxy pattern** (EIP-2535) for atomic, zero-downtime contract upgrades
+- **Curio MK20 integration** with auto-discovery of SP endpoints from on-chain data
+- **Comprehensive CLI** for seamless interaction with the protocol
+- **Automated deal management** with configurable terms and conditions
 
 ## Project Structure
 
-This repository contains two main components:
-
-### 1. Smart Contracts (`contracts/`)
-
-Smart contracts implementing the DDO protocol with customizable deal logic, payment processing, and SLA enforcement. **Built with Foundry framework.**
-
-### 2. CLI Tool (`internal/`)
-
-Command-line interface for interacting with DDO contracts. **Full documentation available in [CLI_USAGE.md](CLI_USAGE.md)**.
-
 ```
 .
-├── contracts/           # Smart contract implementations
-│   ├── src/            # Contract source files
-│   ├── lib/            # Dependencies
-│   └── foundry.toml    # Foundry configuration
+├── cmd/cli/main.go                      # CLI entry point
+├── contracts/
+│   ├── src/
+│   │   ├── diamond/
+│   │   │   ├── Diamond.sol              # EIP-2535 proxy — delegates calls to facets
+│   │   │   ├── InitDiamond.sol          # Initializer (payments, commission, lockup)
+│   │   │   ├── facets/
+│   │   │   │   ├── AdminFacet.sol       # Owner-only config management
+│   │   │   │   ├── AllocationFacet.sol  # Allocations, settlements, Filecoin callbacks
+│   │   │   │   ├── SPFacet.sol          # SP registration, pricing, tokens
+│   │   │   │   ├── ViewFacet.sol        # Read-only queries
+│   │   │   │   ├── ValidatorFacet.sol   # Payment validation
+│   │   │   │   ├── DiamondCutFacet.sol  # Upgrade operations
+│   │   │   │   ├── DiamondLoupeFacet.sol# Introspection (EIP-2535)
+│   │   │   │   ├── OwnershipFacet.sol   # Ownership transfer
+│   │   │   │   └── mock/               # Test variants with mock behavior
+│   │   │   ├── interfaces/              # IDiamondCut, IDiamondLoupe, IERC165
+│   │   │   └── libraries/
+│   │   │       ├── LibDDOStorage.sol    # Shared state, types, events, errors
+│   │   │       ├── LibDiamond.sol       # Diamond storage and cut logic
+│   │   │       └── VerifRegSerializationDiamond.sol
+│   │   └── SimpleERC20.sol              # Test token
+│   ├── script/
+│   │   ├── DeployDiamond.s.sol          # Full diamond deployment
+│   │   └── DeployPayments.s.sol         # Payments contract deployment
+│   ├── shell/
+│   │   └── setup.sh                     # Devnet setup (deploy, fund, grant DataCap)
+│   ├── test/diamond/                    # Diamond-based test suite
+│   └── foundry.toml
 ├── internal/
-│   ├── commands/       # CLI command implementations
-│   ├── contract/       # Contract interaction logic
-│   ├── config/         # Configuration management
-│   ├── types/          # Type definitions
-│   ├── token/          # Token handling utilities
-│   └── utils/          # Helper utilities
-├── cmd/cli/            # CLI application entry point
-├── examples/           # Example input files
-└── CLI_USAGE.md       # Complete CLI documentation
+│   ├── commands/
+│   │   ├── allocations/                 # create-from-file, query, query-claim-info
+│   │   ├── sp/                          # register, list, settle, update, deactivate
+│   │   ├── payments/                    # account, operator-approval, withdraw, etc.
+│   │   └── admin/                       # Owner-only admin commands
+│   ├── contract/
+│   │   ├── ddo/                         # Go bindings for DDO Diamond
+│   │   ├── payments/                    # Go bindings for Payments contract
+│   │   └── token/                       # ERC20 interactions
+│   ├── config/                          # Env var config loading
+│   ├── curio/                           # Curio MK20 client, SP auto-discovery
+│   ├── types/                           # Shared Go types
+│   └── utils/                           # Payment setup, cost calculation
+└── CLAUDE.md                            # AI assistant instructions
 ```
 
 ## Officially Deployed Contracts
+
+### Filecoin Mainnet
+
+| Contract              | Address                                      | Description                       |
+| --------------------- | -------------------------------------------- | --------------------------------- |
+| **DDO Contract**      | [`0x94A53ac3ca6743990ebB659F3Fe84198420d088c`](https://filecoin.blockscout.com/address/0x94A53ac3ca6743990ebB659F3Fe84198420d088c) | Diamond proxy (main entry point)  |
+| **Payments Contract** | [`0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa`](https://filecoin.blockscout.com/address/0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa) | Payment processing and settlement |
 
 ### Filecoin Calibration Testnet
 
 | Contract              | Address                                      | Description                       |
 | --------------------- | -------------------------------------------- | --------------------------------- |
-| **DDO Contract**      | `0x5638917113653Ebe0B8dC0A874037088e9e297FA` | Main data onboarding contract     |
-| **Payments Contract** | `0x549a0cE5c649fF9c284f03F479e41E1Ed881F637` | Payment processing and settlement |
+| **DDO Contract**      | [`0x889fD50196BE300D06dc4b8F0F17fdB0af587095`](https://filecoin-testnet.blockscout.com/address/0x889fD50196BE300D06dc4b8F0F17fdB0af587095) | Diamond proxy (main entry point)  |
+| **Payments Contract** | [`0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0`](https://filecoin-testnet.blockscout.com/address/0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0) | Payment processing and settlement |
 
 ### Supported Tokens
 
-| Token                      | Symbol  | Address                                      | Description                    |
-| -------------------------- | ------- | -------------------------------------------- | ------------------------------ |
-| **USD Coin (Calibration)** | `USDFC` | `0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0` | Calibration testnet stablecoin |
+| Token    | Symbol  | Network     | Address                                      |
+| -------- | ------- | ----------- | -------------------------------------------- |
+| **USDFC** | `USDFC` | Mainnet     | [`0x80B98d3aa09ffff255c3ba4A241111Ff1262F045`](https://filecoin.blockscout.com/address/0x80B98d3aa09ffff255c3ba4A241111Ff1262F045) |
+| **USDFC** | `USDFC` | Calibration | [`0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0`](https://filecoin-testnet.blockscout.com/address/0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0) |
 
 ## Quick Start
-
-### 1. Build the CLI
-
-```bash
-# Download dependencies
-go mod tidy
-
-# Build the CLI
-go build -o ddo cmd/cli/main.go
-```
-
-### 2. Configure Environment
-
-```bash
-# Required configuration
-export DDO_CONTRACT_ADDRESS="0x1234567890abcdef1234567890abcdef12345678"
-export PAYMENTS_CONTRACT_ADDRESS="0xabcdef1234567890abcdef1234567890abcdef12"
-export RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-
-# Required for transactions
-export PRIVATE_KEY="your_private_key_without_0x_prefix"
-```
-
-### 3. Basic Usage Examples
-
-**Query storage providers:**
-
-```bash
-./ddo sp query --actor-id 17840
-```
-
-**Create data allocation:**
-
-```bash
-./ddo allocations create-from-file \
-  --input ./my-data.txt \
-  --provider 17840 \
-  --payment-token 0x1234567890abcdef1234567890abcdef12345678 \
-  --term-min 518400 \
-  --term-max 1036800
-```
-
-**Check allocation status:**
-
-```bash
-./ddo allocations query --client-address 0xYourAddress
-```
-
-For complete CLI documentation, see **[CLI_USAGE.md](CLI_USAGE.md)**.
-
-## Smart Contract Development
-
-The smart contracts are built using the **Foundry framework** for robust development, testing, and deployment.
-
-### Prerequisites for Contract Development
-
-- [Foundry](https://book.getfoundry.sh/getting-started/installation) installed
-- Git for dependency management
-- Access to Filecoin Calibration testnet RPC
-
-### Initialize Contracts
-
-```bash
-# Navigate to contracts directory
-cd contracts/
-
-# Install Foundry dependencies
-forge install
-
-# Update dependencies (if needed)
-forge update
-```
-
-### Build Contracts
-
-```bash
-# Compile all contracts
-forge build
-
-# Build with specific Solidity version
-forge build --use 0.8.19
-```
-
-### Run Tests
-
-```bash
-# Run all tests
-forge test
-
-# Run tests with verbosity
-forge test -v
-
-# Run specific test file
-forge test --match-path test/DDOClient.t.sol
-
-# Run tests with gas reporting
-forge test --gas-report
-
-# Run tests with coverage
-forge coverage
-```
-
-### Deploy to Calibration Testnet
-
-```bash
-# Set environment variables
-export RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-export PRIVATE_KEY="your_private_key_without_0x_prefix"
-
-# Deploy contracts
-forge create --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast src/DDOClient.sol:DDOClient
-```
-
-### Contract Interaction
-
-```bash
-# Call read-only functions
-cast call <CONTRACT_ADDRESS> "getAllocationIdsForClient(address)" <CLIENT_ADDRESS> --rpc-url $RPC_URL
-
-# Send transactions
-cast send <CONTRACT_ADDRESS> "createAllocationRequest(...)" <PARAMS> --private-key $PRIVATE_KEY --rpc-url $RPC_URL
-
-```
-
-### Development Workflow
-
-1. **Write contracts** in `contracts/src/`
-2. **Add tests** in `contracts/test/`
-3. **Run tests** with `forge test`
-4. **Deploy locally** for testing
-5. **Deploy to testnet** when ready
-6. **Update CLI** with new contract addresses
-
-## Complete Deal Flow Process
-
-This section provides a comprehensive guide for the end-to-end data onboarding process using DDO Client, from initial setup to deal completion and payment settlement.
-
-### Prerequisites and Setup
-
-#### 1. Environment Setup
-
-First, set up your environment variables for the Filecoin Calibration testnet:
-
-```bash
-# Required configuration
-export DDO_CONTRACT_ADDRESS="0x5638917113653Ebe0B8dC0A874037088e9e297FA"
-export PAYMENTS_CONTRACT_ADDRESS="0x549a0cE5c649fF9c284f03F479e41E1Ed881F637"
-export RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-
-# Your private key (required for transactions)
-export PRIVATE_KEY="your_private_key_without_0x_prefix"
-
-# Buffer service configuration (for data preparation)
-export LIGHTHOUSE_API_KEY="your_lighthouse_api_key"
-export BUFFER_URL="https://gateway.lighthouse.storage/ipfs/"
-```
-
-#### 2. Build the CLI
-
-```bash
-# Clone and build the DDO client
-git clone <repository-url>
-cd ddo-client
-go mod tidy
-go build -o ddo cmd/cli/main.go
-chmod +x ddo
-```
-
-#### 3. Get Testnet Tokens
-
-You'll need both testnet FIL for gas fees and USDFC for storage payments:
-
-**Get Testnet FIL:**
-
-- Visit the [Filecoin Calibration Faucet](https://faucet.calibnet.chainsafe-fil.io/)
-- Request testnet FIL tokens for your wallet address
-- These tokens are used for transaction gas fees
-
-**Get USDFC Tokens:**
-
-- Visit the [USDFC Faucet](https://forest-explorer.chainsafe.dev/faucet/calibnet_usdfc)
-- Request USDFC tokens for storage payments
-- USDFC is the supported stablecoin for storage deals
-
-### Storage Provider Information
-
-For this tutorial, we'll use Storage Provider **17840** which offers the following specifications:
-
-<details open>
-<summary><strong>Storage Provider 17840 Details</strong></summary>
-
-```
-📋 Storage Provider Information
-=====================================
-
-🆔 Basic Information:
-   Actor ID: 17840
-   Payment Address: 0xFe643b54727d53C49835f9f6c1a2B9861E741d98
-   Status: ✅ Active
-
-📏 Capacity Limits:
-   Min Piece Size: 1024.00 KB (1048576 bytes)
-   Max Piece Size: 524288.00 KB (536870912 bytes)
-
-⏰ Term Limits:
-   Min Term: 86400 epochs (~30.0 days)
-   Max Term: 5256000 epochs (~1825.0 days)
-
-🪙 Supported Tokens (1 tokens):
-   1. ✅ Active
-      Token Address: 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0
-      Price: $2.94 USD per TB per month (31 token units per byte per epoch)
-      Example Costs:
-        1024.00 KB for 30 days: 0.00 USDC
-        1024.00 KB for 180 days: 0.00 USDC
-        1024.00 KB for 360 days: 0.00 USDC
-```
-
-</details>
-
-### Step-by-Step Deal Creation Process
-
-#### Step 1: Verify Storage Provider Information
-
-First, query the storage provider to confirm their configuration:
-
-```bash
-./ddo sp query --actor-id 17840 -r $RPC_URL -c $DDO_CONTRACT_ADDRESS
-```
-
-This will display the storage provider's current configuration, pricing, and availability.
-
-#### Step 2: Approve Payment Token (Optional)
-
-Before creating deals, approve the USDFC token for the payments contract:
-
-```bash
-./ddo approve-token \
-  --token 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0 \
-  --payments-contract $PAYMENTS_CONTRACT_ADDRESS \
-  --rpc $RPC_URL \
-  --private-key $PRIVATE_KEY \
-  --unlimited
-```
-
-This one-time approval allows the payments contract to handle USDFC transfers for your deals.
-
-#### Step 3: Create Data Allocation
-
-Now create your data allocation using the `create-from-file` command. This command will:
-
-- Prepare your data (create CAR files, calculate piece CIDs)
-- Upload data to the buffer service (Lighthouse)
-- Create the allocation request on-chain
-- Initialize payment rails
-
-```bash
-./ddo allocations create-from-file \
-  --rpc $RPC_URL \
-  --contract $DDO_CONTRACT_ADDRESS \
-  --payments-contract $PAYMENTS_CONTRACT_ADDRESS \
-  --buffer-type lighthouse \
-  --buffer-api-key $LIGHTHOUSE_API_KEY \
-  --buffer-url $BUFFER_URL \
-  --provider 17840 \
-  --payment-token 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0 \
-  --input /path/to/your/file \
-  --term-min 86400 \
-  --term-max 518400 \
-  --private-key $PRIVATE_KEY
-```
-
-**Alternative short form command:**
-
-```bash
-./ddo allocations cff \
-  -r $RPC_URL \
-  --buffer-type lighthouse \
-  --buffer-api-key $LIGHTHOUSE_API_KEY \
-  --buffer-url https://gateway.lighthouse.storage/ipfs/ \
-  --provider 17840 \
-  -c $DDO_CONTRACT_ADDRESS \
-  --pc $PAYMENTS_CONTRACT_ADDRESS \
-  --payment-token 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0 \
-  --input /path/to/file
-```
-
-<details>
-<summary><strong>Expected Output</strong></summary>
-
-```
-📁 Preparing data from: /path/to/file
-✅ Data prepared successfully!
-   Piece CID: baga6ea4seaqbq6kvyhh3ezegcwkt66ew3c3ynudmklpzfiyxhl7e7pi6abpucha
-   Piece Size: 33554432 bytes
-   Payload CID: <payload_cid>
-   CAR Size: 21310472 bytes
-   Buffer URL: https://gateway.lighthouse.storage/ipfs/<cid>
-
-🏗️  Allocation Creation Summary:
-   Client Address: 0x9299eac94952235Ae86b94122D2f7c77F7F6Ad30
-   DDO Contract: 0x5638917113653Ebe0B8dC0A874037088e9e297FA
-   Payments Contract: 0x549a0cE5c649fF9c284f03F479e41E1Ed881F637
-   RPC: https://api.calibration.node.glif.io/rpc/v1
-
-📦 Prepared Piece:
-   Provider: 17840
-   Size: 33554432 bytes
-   Payment Token: 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0
-   Download URL: https://gateway.lighthouse.storage/ipfs/<cid>
-
-💰 Calculating storage costs...
-📊 Cost Analysis:
-   Total Storage Cost: 539233144012800
-   Price: $2.94 USD per TB per month (31 token units per byte per epoch)
-   Total Bytes: 33554432
-   Total Epochs: 518400
-   User Address: 0x9299eac94952235Ae86b94122D2f7c77F7F6Ad30
-
-🔧 Setting up payments...
-💰 Payment Setup Summary:
-   Token: 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0
-   Total Storage Cost: 539233144012800
-   One Month Allowance: 89872190668800
-   Required Deposit: 1078466288025600
-
-📊 Current Account Status:
-   Funds: 1336406084169267
-   Lockup Current: 359490843049984
-   Available: 976915241119283
-
-⚠️  Insufficient funds. Need to deposit: 101551046906317
-🔍 Checking ERC20 token allowance...
-✅ Token allowance already sufficient
-💸 Depositing 101551046906317 tokens...
-✅ Deposit transaction sent: 0x7bf2ab7f2336b27a50d721617a0422a523b33d6b9e641ee4eace6bee6b310309
-⏳ Waiting for deposit transaction to be mined...
-⏳ Waiting for transaction 0x7bf2ab7f2336b27a50d721617a0422a523b33d6b9e641ee4eace6bee6b310309 to be mined...
-✅ Transaction mined successfully
-🔐 Operator Approval Status:
-   Is Approved: true
-   Rate Allowance: 3128688640
-   Lockup Allowance: 537472106758144
-   Rate Usage: 1040187392
-   Lockup Usage: 359488762675200
-
-🔧 Updating operator approval...
-⏳ Waiting for operator approval transaction to be mined...
-⏳ Waiting for transaction 0x51337aa1c9106f7a02a6e406490e0022ce234b8e1d1af5f42b7a8515cefc6ebf to be mined...
-✅ Transaction mined successfully
-✅ Operator approval transaction sent: 0x51337aa1c9106f7a02a6e406490e0022ce234b8e1d1af5f42b7a8515cefc6ebf
-✅ Payment setup completed!
-
-🚀 Creating allocation request...
-DDO Contract: 0x5638917113653Ebe0B8dC0A874037088e9e297FA
-Payments Contract: 0x549a0cE5c649fF9c284f03F479e41E1Ed881F637
-RPC: https://api.calibration.node.glif.io/rpc/v1
-✅ Transaction successful!
-Transaction Hash: 0x82dcfff2c8e98796b2a1cddbe5fcf240489e68164fea90c65725b48dd81e3f8c
-⏳ Waiting for allocation creation transaction to be mined...
-⏳ Waiting for transaction 0x82dcfff2c8e98796b2a1cddbe5fcf240489e68164fea90c65725b48dd81e3f8c to be mined...
-✅ Transaction mined successfully
-✅ Allocation creation transaction mined successfully!
-```
-
-</details>
-
-#### Step 4: Query Your Allocations
-
-Verify your allocation was created successfully:
-
-```bash
-./ddo allocations query \
-  --rpc $RPC_URL \
-  --contract $DDO_CONTRACT_ADDRESS \
-  --client-address 0x9299eac94952235Ae86b94122D2f7c77F7F6Ad30
-```
-
-**Expected Output:**
-
-<details open>
-<summary><strong>Query Allocations Output</strong></summary>
-
-```
-Contract: 0x5638917113653Ebe0B8dC0A874037088e9e297FA
-RPC: https://api.calibration.node.glif.io/rpc/v1
-
-🔍 Querying allocations for client: 0x9299eac94952235Ae86b94122D2f7c77F7F6Ad30
-📊 Results:
-Total allocations: 1
-
-Allocation IDs:
-  1: 66655
-```
-
-</details>
-
-### Storage Provider Data Onboarding
-
-Once your allocation is created, the storage provider will:
-
-1. **Listen for Events**: The storage provider runs [ddo-sp](https://github.com/eastore-project/ddo-sp) to monitor for new allocation events
-2. **Download Data**: Retrieve your data from the buffer service (Lighthouse)
-3. **Onboard Data**: Complete the data onboarding process using boost
-
-This process can take few hours depending on data size and network conditions.
-
-### Step 5: Monitor Deal Progress
-
-Check if the storage provider has successfully onboarded your data:
-
-```bash
-./ddo allocations query-claim-info \
-  --rpc $RPC_URL \
-  --contract $DDO_CONTRACT_ADDRESS \
-  --client-address 0x9299eac94952235Ae86b94122D2f7c77F7F6Ad30 \
-  --claim-id 66655
-```
-
-Expected output:
-
-<details open>
-<summary><strong>Query Claim Info Output</strong></summary>
-
-```
-🔍 Querying claim info for allocation ID: 66655
-Client: 0x9299eac94952235Ae86b94122D2f7c77F7F6Ad30
-Claim ID: 66655
-Contract: 0x5638917113653Ebe0B8dC0A874037088e9e297FA
-RPC: https://api.calibration.node.glif.io/rpc/v1
-
-📊 Results:
-Found 1 claim(s)
-
-Claim #1:
-  Provider ID: 17840
-  Client ID: 165718
-  Data (hex): 000181e2039220209c8500b9be5a8b063c769eb331c42fd4b92320da30acc640eee35b2ce4dad621
-  Piece CID: baga6ea4seaqjzbiaxg7fvcyghr3j5mzryqx5jojdedndblggidxogwzm4tnnmii
-  Size: 33554432 bytes
-  Term Min: 518400
-  Term Max: 5256000
-  Term Start: 2807249
-  Sector ID: 577
-```
-
-</details>
-
-### Payment Settlement Process
-
-#### Step 6: Settle Payments
-
-Anyone can trigger payment settlement for active deals. This transfers earned payments from the client to the storage provider:
-
-```bash
-./ddo sp settle \
-  --rpc $RPC_URL \
-  --contract $DDO_CONTRACT_ADDRESS \
-  --payments-contract $PAYMENTS_CONTRACT_ADDRESS \
-  --provider 17840 \
-  --allocation-id 65869 \
-  --until-epoch 2550000 \
-  --private-key $PRIVATE_KEY
-```
-
-**Example Output:**
-
-<details open>
-<summary><strong>Settlement Output</strong></summary>
-
-```
-Using current block number as until-epoch: 2818531
-🔍 Getting SP information for provider 17840...
-payments contract string is 0x549a0cE5c649fF9c284f03F479e41E1Ed881F637
-Using provided payments contract address: 0x549a0cE5c649fF9c284f03F479e41E1Ed881F637
-🏦 Settlement Parameters:
-   User Address: 0x9299eac94952235Ae86b94122D2f7c77F7F6Ad30
-   DDO Contract: 0x5638917113653Ebe0B8dC0A874037088e9e297FA
-   Payments Contract: 0x549a0cE5c649fF9c284f03F479e41E1Ed881F637
-   Until Epoch: 2818531
-   SP Payment Address: 0xFe643b54727d53C49835f9f6c1a2B9861E741d98
-   SP Active Tokens: 1
-
-📋 SP Supported Tokens:
-   1. 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0 - active (price: $2.94 USD per TB per month (31 token units per byte per epoch))
-
-💰 Checking SP account information before settlement...
-🔍 SP Account Info (Before) - 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0:
-   Funds: 3146314318905
-   Lockup Current: 0
-   Lockup Rate: 0
-   Lockup Last Settled At: 0
-
-💰 Settling payment for allocation 66655 until epoch 2818531...
-✅ Settlement transaction successful!
-Transaction Hash: 0xa507cf0f02f180fc3e1e939307812cacd8564754b22d087ed72eab0a0ce5f494
-⏳ Waiting for settlement transaction to be mined...
-⏳ Waiting for transaction 0xa507cf0f02f180fc3e1e939307812cacd8564754b22d087ed72eab0a0ce5f494 to be mined...
-✅ Transaction mined successfully
-✅ Settlement transaction mined successfully
-
-💰 Checking SP account information after settlement...
-🔍 SP Account Info (After) - 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0:
-   Funds: 11665040468578
-   Lockup Current: 0
-   Lockup Rate: 0
-   Lockup Last Settled At: 0
-```
-
-</details>
-
-#### Step 7: Storage Provider Withdrawal
-
-The storage provider can withdraw their earned payments using their registered payment address:
-
-```bash
-./ddo payments withdraw \
-  --rpc $RPC_URL \
-  --payments-contract $PAYMENTS_CONTRACT_ADDRESS \
-  --token 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0 \
-  --amount 150000 \
-  --private-key $SP_PRIVATE_KEY
-```
-
-**Expected Output:**
-
-<details open>
-<summary><strong>Withdrawal Output</strong></summary>
-
-```
-💸 Withdrawal Process:
-   Token: 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0 (USDFC)
-   Amount: 0.15 USDC
-   To Address: 0xFe643b54727d53C49835f9f6c1a2B9861E741d98
-
-✅ Withdrawal successful!
-   Transaction: 0x789abc...
-```
-
-</details>
-
-### Deal Lifecycle Summary
-
-1. **Setup** (5 mins): Configure environment, get testnet tokens, build CLI
-2. **Approval** (1 transaction): Approve USDFC for payments contract
-3. **Data Preparation** (2-5 mins): Create CAR files, upload to buffer service
-4. **Allocation Creation** (1 transaction): Create on-chain allocation request
-5. **SP Onboarding** (15-30 mins): Storage provider downloads and onboards data
-6. **Monitoring** (ongoing): Query deal status and claim information
-7. **Settlement** (periodic): Settle payments based on storage duration
-8. **Withdrawal** (as needed): Storage provider withdraws earned payments
-
-### Key Benefits of DDO vs Traditional F05
-
-- **🔄 Automated Payments**: Monthly payment rails eliminate manual deal renewals
-- **⛽ Lower Gas Costs**: Batch operations and optimized smart contracts reduce fees
-- **🎯 Customizable SLAs**: Configure terms, pricing, and conditions per storage provider
-- **💰 Stablecoin Support**: Use USDFC for predictable pricing instead of volatile FIL
-- **🚀 Direct Settlement**: No intermediary market overhead or complex deal negotiations
-
-This completes the full end-to-end process for direct data onboarding using DDO Client!
-
-## Development
 
 ### Prerequisites
 
 - Go 1.22+
-- Foundry (for smart contract development)
-- Access to Filecoin Calibration testnet
-- Private key for transaction operations
+- [Foundry](https://book.getfoundry.sh/getting-started/installation)
+- Access to a Filecoin node (devnet, calibration, or mainnet)
 
-### Architecture
+### Build
 
-The CLI is designed with a modular architecture for easy extension:
+```bash
+# Build CLI
+go mod tidy
+go build -ldflags="-s -w" -o ddo ./cmd/cli
 
-- **Commands** - Individual CLI command implementations
-- **Contract** - Smart contract interaction logic
-- **Config** - Environment and configuration management
-- **Types** - Shared data structures
-- **Utils** - Common utilities and helpers
+# Build contracts
+cd contracts && forge build
+```
 
-### Adding New Features
+### Configure Environment
 
-1. **Add CLI commands** in `internal/commands/`
-2. **Extend contract functions** in `internal/contract/`
-3. **Update types** in `internal/types/` if needed
-4. **Register commands** in `cmd/cli/main.go`
+```bash
+export DDO_CONTRACT_ADDRESS="0x..."
+export PAYMENTS_CONTRACT_ADDRESS="0x..."
+export RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+export PRIVATE_KEY="your_private_key"
+```
 
-## Documentation
+## Smart Contract Architecture
 
-- **[CLI_USAGE.md](CLI_USAGE.md)** - Complete CLI command reference
-- **Contract Documentation** - Available in `contracts/` directory
-- **Examples** - Sample configurations in `examples/` directory
+### Diamond Pattern (EIP-2535)
 
-## Support
+The DDO contract uses the Diamond proxy pattern where each 4-byte function selector is independently mapped to a facet address. This enables:
 
-For issues, questions, or contributions, please refer to the project's issue tracker or documentation.
+- **Full swap**: Replace all selectors of a facet at once
+- **Partial swap**: Replace only some selectors while keeping others on the old facet
+- **Mix & match**: Route different selectors to different facet versions
+- **Add new functions**: Add brand new selectors pointing to any facet
+- **Atomic**: All changes happen in a single `diamondCut()` transaction
+- **Zero downtime**: Existing storage and state are preserved across upgrades
+
+### Facets
+
+| Facet | Selectors | Purpose |
+|---|---|---|
+| **AllocationFacet** | 4 | `createAllocationRequests`, `settleSpPayment`, `settleSpTotalPayment`, `handle_filecoin_method` |
+| **ViewFacet** | 9 | `getAllSPIds`, `getAllocationIdsForClient`, `getAllocationIdsForProvider`, `allocationInfos`, `getAllocationRailInfo`, `getClaimInfo`, `getClaimInfoForClient`, `getDealId`, `getVersion` |
+| **SPFacet** | 17 | SP registration, pricing, token management, queries |
+| **AdminFacet** | 18 | Owner-only: set payments contract, commission, lockup, pause/unpause, blacklist, rescue FIL, read constants |
+| **ValidatorFacet** | 2 | `validatePayment`, `railTerminated` |
+| **DiamondCutFacet** | 1 | `diamondCut` — upgrade operations |
+| **DiamondLoupeFacet** | 5 | Introspection: `facets`, `facetFunctionSelectors`, `facetAddresses`, `facetAddress`, `supportsInterface` |
+| **OwnershipFacet** | 2 | `transferOwnership`, `owner` |
+
+### Deploy Diamond
+
+```bash
+cd contracts
+
+# Deploy payments contract first
+forge script script/DeployPayments.s.sol \
+  --rpc-url $RPC_URL --account <keystore-name> --broadcast --slow --gas-estimate-multiplier 100000
+
+# Deploy Diamond with all facets
+export DEPLOYER_ADDRESS="0x..."
+export PAYMENTS_CONTRACT_ADDRESS="<address from above>"
+forge script script/DeployDiamond.s.sol \
+  --rpc-url $RPC_URL --account <keystore-name> --broadcast --slow --gas-estimate-multiplier 100000
+```
+
+> **Note:** Filecoin requires much higher gas estimates than Ethereum due to on-chain message storage costs. The `--gas-estimate-multiplier 100000` (1000x) accounts for this.
+
+### Contract Testing
+
+```bash
+cd contracts
+
+# Run all tests
+forge test
+
+# Run with verbosity
+forge test -vvv
+
+# Run specific test file
+forge test --match-path test/diamond/DiamondAllocationTest.sol
+
+# Run specific test function
+forge test --match-test testCreateAllocation
+```
+
+## CLI Usage
+
+### Storage Provider Management
+
+```bash
+# List all registered SPs
+./ddo sp list --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS
+
+# Query a specific SP
+./ddo sp query --actor-id 1002 --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS
+
+# Register a new SP (owner-only)
+./ddo sp register \
+  --actor-id 1002 \
+  --payment-address 0x... \
+  --min-piece-size 256 \
+  --max-piece-size 34359738368 \
+  --min-term 518400 \
+  --max-term 5256000 \
+  --token $TOKEN_ADDRESS \
+  --price 105 \
+  --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS --private-key $PRIVATE_KEY
+
+# Settle all active rails for a provider
+./ddo sp settle --provider 1002 \
+  --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS --private-key $PRIVATE_KEY
+
+# Deactivate an SP (owner-only)
+./ddo sp deactivate --actor-id 1002 \
+  --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS --private-key $PRIVATE_KEY
+```
+
+### Create Allocations
+
+The `create-from-file` command handles the full E2E flow:
+
+1. Prepares data (generates piece CID, CAR file)
+2. Calculates storage costs based on SP pricing
+3. Sets up payments (deposits, operator approvals) automatically
+4. Creates on-chain allocation via DataCap transfer
+5. Optionally submits deal to Curio MK20 (pass `--curio-upload` to enable)
+
+> **Note:** The CLI applies a **2x buffer** on required deposits and lockup allowances to ensure sufficient headroom for rate-based lockups and settlement timing. This is a conservative estimate that will be refined in future versions. Use `--skip-payment-setup` to bypass automatic setup if you prefer to manage payments manually.
+
+```bash
+./ddo allocations create-from-file \
+  --input ./my-data.txt \
+  --provider 1002 \
+  --payment-token $TOKEN_ADDRESS \
+  --rpc $RPC_URL \
+  --contract $DDO_CONTRACT_ADDRESS \
+  --payments-contract $PAYMENTS_CONTRACT_ADDRESS \
+  --private-key $PRIVATE_KEY
+```
+
+#### Optional Flags
+
+| Flag | Description |
+|---|---|
+| `--curio-upload` | Enable Curio MK20 deal submission after on-chain allocation (default: off, env: `CURIO_UPLOAD`) |
+| `--curio-api URL` | Curio API URL (skips auto-discovery, env: `CURIO_API`) |
+| `--skip-contract-verify` | Use `0xtest` address for Curio verification (devnet testing) |
+| `--skip-payment-setup` | Skip automatic deposit/approval setup |
+| `--dry-run` | Calculate costs without sending transactions |
+| `--term-min N` | Minimum term in epochs (default: 518400) |
+| `--term-max N` | Maximum term in epochs (default: 5256000) |
+| `--expiration-offset N` | Expiration offset from current block (default: 172800) |
+| `--buffer-type TYPE` | Buffer type: `local` or `lighthouse` (default: local) |
+| `--buffer-api-key KEY` | Buffer service API key (for lighthouse) |
+| `--buffer-url URL` | Buffer service base URL |
+| `--download-url URL` | Override download URL for the piece |
+| `--provider-fil-addr ADDR` | Override provider Filecoin address (e.g., t03123279) |
+
+#### Using Lighthouse Buffer
+
+For calibration/mainnet deployments with remote data hosting:
+
+```bash
+./ddo allocations create-from-file \
+  --input /path/to/file \
+  --provider 17840 \
+  --payment-token 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0 \
+  --buffer-type lighthouse \
+  --buffer-api-key $LIGHTHOUSE_API_KEY \
+  --buffer-url https://gateway.lighthouse.storage/ipfs/ \
+  --rpc $RPC_URL \
+  --contract $DDO_CONTRACT_ADDRESS \
+  --payments-contract $PAYMENTS_CONTRACT_ADDRESS \
+  --private-key $PRIVATE_KEY
+```
+
+### Query Allocations
+
+```bash
+# Query allocation details and rail info
+./ddo allocations query --allocation-id 5 \
+  --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS
+
+# Query allocations by client address
+./ddo allocations query --client-address 0x... \
+  --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS
+
+# Query claim info for a client
+./ddo allocations query-claim-info \
+  --client-address 0x... --claim-id 5 \
+  --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS
+```
+
+### Payments
+
+```bash
+# Query payment account info
+./ddo payments account --address 0x... --token $TOKEN_ADDRESS \
+  --rpc $RPC_URL --payments-contract $PAYMENTS_CONTRACT_ADDRESS
+
+# Set operator allowance
+./ddo payments set-operator-allowance \
+  --operator $DDO_CONTRACT_ADDRESS \
+  --rate-allowance 860160 \
+  --lockup-allowance 6000000000000000000 \
+  --rpc $RPC_URL --payments-contract $PAYMENTS_CONTRACT_ADDRESS --private-key $PRIVATE_KEY
+
+# Withdraw funds
+./ddo payments withdraw --token $TOKEN_ADDRESS --amount 1000000 \
+  --rpc $RPC_URL --payments-contract $PAYMENTS_CONTRACT_ADDRESS --private-key $PRIVATE_KEY
+```
+
+### Admin Commands (Owner-Only)
+
+```bash
+# Set payments contract
+./ddo admin set-payments-contract --address 0x... \
+  --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS --private-key $PRIVATE_KEY
+
+# Set commission rate (basis points, max 100 = 1%)
+./ddo admin set-commission-rate --bps 50 \
+  --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS --private-key $PRIVATE_KEY
+
+# Set allocation lockup amount
+./ddo admin set-lockup-amount --amount 1000000000000000000 \
+  --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS --private-key $PRIVATE_KEY
+
+# Pause / unpause contract
+./ddo admin pause --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS --private-key $PRIVATE_KEY
+./ddo admin unpause --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS --private-key $PRIVATE_KEY
+./ddo admin is-paused --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS
+
+# Blacklist a sector (blocks payment settlement for that sector)
+./ddo admin blacklist-sector --provider 1002 --sector 42 \
+  --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS --private-key $PRIVATE_KEY
+
+# Remove from blacklist
+./ddo admin blacklist-sector --provider 1002 --sector 42 --remove \
+  --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS --private-key $PRIVATE_KEY
+
+# Check if a sector is blacklisted
+./ddo admin is-sector-blacklisted --provider 1002 --sector 42 \
+  --rpc $RPC_URL --contract $DDO_CONTRACT_ADDRESS
+```
+
+### Token Approval
+
+```bash
+./ddo approve-token --token $TOKEN_ADDRESS --amount 1000000000000000000 \
+  --rpc $RPC_URL --payments-contract $PAYMENTS_CONTRACT_ADDRESS --private-key $PRIVATE_KEY
+```
+
+## Curio MK20 Integration
+
+Curio deal submission is **opt-in** — pass `--curio-upload` (or set `CURIO_UPLOAD=true`) to enable it. When enabled:
+
+1. If `--curio-api` is not provided, the CLI auto-discovers the SP's Curio API URL from on-chain multiaddrs
+2. After the on-chain allocation is created, the deal is submitted to Curio MK20
+3. The CAR file is uploaded and finalized
+
+**Auto-discovery** queries `Filecoin.StateMinerInfo` for the provider's on-chain multiaddrs, parses them looking for `/http` or `/https` endpoints, and falls back to extracting host:port from any multiaddr with `/ip4`, `/ip6`, or `/dns` + `/tcp` components.
+
+## Complete Deal Flow
+
+### End-to-End Process
+
+1. **Setup**: Configure environment, get tokens, build CLI
+2. **Register SP** (owner): Register storage provider with pricing and capacity config
+3. **Approve Token** (one-time): Approve payment token for the payments contract
+4. **Create Allocation**: Data prep, payment setup, on-chain allocation, Curio deal submission — all in one command
+5. **SP Onboarding**: Curio seals the data into a sector and triggers `handle_filecoin_method` callback
+6. **Activation**: The contract activates the payment rail when the sector is committed
+7. **Settlement** (periodic): Anyone can trigger `settleSpPayment` or `settleSpTotalPayment` to transfer accrued payments
+8. **Withdrawal**: SP withdraws earned payments from the payments contract
+
+### Key Domain Concepts
+
+| Concept | Description |
+|---|---|
+| **Allocation** | DataCap allocation linking a client's data piece to a storage provider via Filecoin's VerifReg actor |
+| **Rail** | Streaming payment channel between client (payer) and SP (payee), operated by the DDO contract |
+| **Settlement** | Transfer of accrued payments from client to SP based on elapsed epochs |
+| **Diamond Cut** | Atomic operation to add/replace/remove function selectors in the Diamond proxy |
+| **Epoch** | Filecoin block time (~30 seconds). `EPOCHS_PER_DAY = 2880`, `EPOCHS_PER_MONTH = 86400` |
+
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `DDO_CONTRACT_ADDRESS` | Yes | DDO Diamond proxy address |
+| `PRIVATE_KEY` | For transactions | Wallet private key (with or without 0x prefix) |
+| `RPC_URL` | No (default: localhost:8545) | Filecoin RPC endpoint |
+| `PAYMENTS_CONTRACT_ADDRESS` | For payment ops | Payments proxy contract address |
+| `BUFFER_API_KEY` | For lighthouse buffer | Lighthouse API key |
+| `BUFFER_URL` | For lighthouse buffer | Lighthouse gateway URL |
+| `CURIO_UPLOAD` | Optional | Set to `true` to enable Curio MK20 deal submission |
+| `CURIO_API` | Optional | Override Curio MK20 API URL (skips auto-discovery) |
+
+All env vars can be overridden with CLI flags (`--rpc`, `--contract`, `--private-key`, `--payments-contract`, etc.).

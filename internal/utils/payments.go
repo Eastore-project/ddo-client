@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	"ddo-client/internal/config"
@@ -63,8 +64,23 @@ func CheckAndSetupPayments(
 	)
 	oneMonthCost.Mul(oneMonthCost, big.NewInt(EPOCHS_PER_MONTH))
 
-	// Required deposit is the total storage cost
+	// Query the contract's allocationLockupAmount (fixed lockup applied per rail at creation)
+	allocationLockupAmount, err := ddoClient.GetAllocationLockupAmount()
+	if err != nil {
+		return fmt.Errorf("failed to get allocation lockup amount: %w", err)
+	}
+
+	// Required deposit must cover both the storage cost and the fixed lockup per rail.
+	// The contract locks allocationLockupAmount per rail at creation time.
+	//
+	// We apply a 2x buffer to the required deposit to ensure the user has enough headroom
+	// for rate-based lockups and payment settlement timing. This is a conservative estimate —
+	// TODO: improve to calculate the exact required amount based on rail lockup mechanics.
+	totalFixedLockupForDeposit := new(big.Int).Mul(allocationLockupAmount, big.NewInt(int64(len(pieceInfos))))
 	requiredDeposit := new(big.Int).Mul(costResult.TotalCost, big.NewInt(2))
+	if totalFixedLockupForDeposit.Cmp(requiredDeposit) > 0 {
+		requiredDeposit.Mul(totalFixedLockupForDeposit, big.NewInt(2))
+	}
 
 	fmt.Printf("💰 Payment Setup Summary:\n")
 	fmt.Printf("   Token: %s\n", tokenAddress.Hex())
@@ -160,9 +176,13 @@ func CheckAndSetupPayments(
 		
 	// Set rate allowance to a large number for flexibility
 	rateAllowance := new(big.Int).Mul(costResult.PricePerBytePerEpoch, new(big.Int).SetUint64(costResult.TotalBytes))
-	// actual cost is 2x one month cost even though we lock just for one month as we unlock fund after one time payment which require 2x allowance to go through
-	// as funds are not unlocked before that operation
-	lockupAllowance := new(big.Int).Mul(oneMonthCost, big.NewInt(2))
+	// Lockup allowance must cover the contract's allocationLockupAmount (fixed lockup per rail)
+	// plus the ongoing rate-based lockup. The peak usage is allocationLockupAmount * numPieces
+	// (applied at rail creation), which later decreases when the rail is activated.
+	// We apply a 2x buffer here as well for safety — TODO: calculate exact requirement.
+	perPieceLockup := new(big.Int).Set(allocationLockupAmount)
+	totalFixedLockup := new(big.Int).Mul(perPieceLockup, big.NewInt(int64(len(pieceInfos))))
+	lockupAllowance := new(big.Int).Mul(totalFixedLockup, big.NewInt(2))
 		var txHash string
 		if !operatorApproval.IsApproved || (new(big.Int).Sub(operatorApproval.RateAllowance, operatorApproval.RateUsage).Cmp(rateAllowance) < 0 && new(big.Int).Sub(operatorApproval.LockupAllowance, operatorApproval.LockupUsage).Cmp(lockupAllowance) < 0) {
 			fmt.Printf("🔧 Setting operator approval...\n")
@@ -312,6 +332,27 @@ func WaitForTransaction(client *ethclient.Client, txHash string) error {
 	
 	fmt.Printf("✅ Transaction mined successfully\n")
 	return nil
+}
+
+// WaitForTransactionWithReceipt waits for a transaction to be mined and returns the receipt
+func WaitForTransactionWithReceipt(client *ethclient.Client, txHash string) (*ethtypes.Receipt, error) {
+	if txHash == "" {
+		return nil, fmt.Errorf("empty transaction hash")
+	}
+
+	hash := common.HexToHash(txHash)
+
+	tx, _, err := client.TransactionByHash(context.Background(), hash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get transaction: %w", err)
+	}
+
+	receipt, err := bind.WaitMined(context.Background(), client, tx)
+	if err != nil {
+		return nil, fmt.Errorf("transaction failed or timed out: %w", err)
+	}
+
+	return receipt, nil
 }
 
 // CalculateTotalDataCap calculates the total DataCap needed (sum of all piece sizes)
