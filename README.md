@@ -118,7 +118,57 @@ export RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
 export PRIVATE_KEY="your_private_key"
 ```
 
-## Smart Contract Architecture
+## Architecture
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant CLI as Go CLI
+    participant Diamond as DDO Diamond
+    participant DataCap as DataCap Actor (f07)
+    participant VerifReg as VerifReg Actor (f06)
+    participant PayV1 as FilecoinPayV1
+    participant Miner as Miner / Curio
+
+    Note over Client,Miner: Phase 1 — Setup (one-time)
+    Client->>CLI: approve-token + deposit
+    CLI->>PayV1: deposit + setOperatorAllowance(DDO)
+
+    Note over Client,Miner: Phase 2 — Create Allocation
+    Client->>CLI: allocations create-from-file
+    CLI->>Diamond: createAllocationRequests([PieceInfo])
+    Diamond->>Diamond: Validate SP config, piece size, term
+    Diamond->>DataCap: transfer(DataCap → VerifReg, CBOR allocations)
+    DataCap->>VerifReg: allocate DataCap
+    VerifReg-->>Diamond: callback → allocationIds[]
+    loop For each allocation
+        Diamond->>PayV1: createRail(token, client, SP, DDO as operator)
+        PayV1-->>Diamond: railId
+        Diamond->>PayV1: modifyRailLockup(railId, lockupAmount)
+    end
+    Diamond-->>CLI: AllocationCreated events
+
+    Note over Client,Miner: Phase 3 — SP Seals Data
+    CLI-->>Miner: Submit deal via Curio MK20 (optional)
+    Miner->>Miner: Seal sector with piece data
+    Miner->>Diamond: handle_filecoin_method(SECTOR_CONTENT_CHANGED)
+    Diamond->>Diamond: Verify miner, match piece CID & size
+    Diamond->>PayV1: modifyRailPayment(railId, rate = price × size)
+    Diamond->>PayV1: modifyRailLockup(railId, EPOCHS_PER_MONTH)
+    Note over Diamond: allocation.activated = true
+
+    Note over Client,Miner: Phase 4 — Streaming Settlement
+    loop Periodic (anyone can trigger)
+        Client->>Diamond: settleSpPayment(allocationId, untilEpoch)
+        Diamond->>PayV1: settleRail(railId, untilEpoch)
+        PayV1->>Diamond: validatePayment(railId, amount) [IValidator]
+        Diamond-->>PayV1: approved amount (0 if sector blacklisted)
+        PayV1-->>Diamond: settlement result
+    end
+
+    Note over Client,Miner: Phase 5 — SP Withdraws
+    Miner->>PayV1: withdraw(token, amount)
+```
 
 ### Diamond Pattern (EIP-2535)
 
