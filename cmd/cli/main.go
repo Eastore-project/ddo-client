@@ -7,12 +7,12 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	"ddo-client/internal/commands"
-	"ddo-client/internal/commands/admin"
-	"ddo-client/internal/commands/allocations"
-	"ddo-client/internal/commands/payments"
-	"ddo-client/internal/commands/sp"
-	"ddo-client/internal/config"
+	"github.com/Eastore-project/ddo-client/internal/commands"
+	"github.com/Eastore-project/ddo-client/internal/commands/admin"
+	"github.com/Eastore-project/ddo-client/internal/commands/allocations"
+	"github.com/Eastore-project/ddo-client/internal/commands/payments"
+	"github.com/Eastore-project/ddo-client/internal/commands/sp"
+	"github.com/Eastore-project/ddo-client/internal/config"
 )
 
 func main() {

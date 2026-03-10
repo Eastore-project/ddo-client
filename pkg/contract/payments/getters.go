@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 
-	"ddo-client/internal/types"
+	"github.com/Eastore-project/ddo-client/pkg/types"
 )
 
 // GetCommissionMaxBPS returns the maximum commission rate in basis points
@@ -21,12 +21,22 @@ func (c *Client) GetCommissionMaxBPS() (*big.Int, error) {
 	return result[0].(*big.Int), nil
 }
 
-// GetPaymentFeeBPS returns the payment fee in basis points
-func (c *Client) GetPaymentFeeBPS() (*big.Int, error) {
+// GetNetworkFeeNumerator returns the network fee numerator
+func (c *Client) GetNetworkFeeNumerator() (*big.Int, error) {
 	var result []interface{}
-	err := c.contract.Call(&bind.CallOpts{Context: context.Background()}, &result, "PAYMENT_FEE_BPS")
+	err := c.contract.Call(&bind.CallOpts{Context: context.Background()}, &result, "NETWORK_FEE_NUMERATOR")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get PAYMENT_FEE_BPS: %w", err)
+		return nil, fmt.Errorf("failed to get NETWORK_FEE_NUMERATOR: %w", err)
+	}
+	return result[0].(*big.Int), nil
+}
+
+// GetNetworkFeeDenominator returns the network fee denominator
+func (c *Client) GetNetworkFeeDenominator() (*big.Int, error) {
+	var result []interface{}
+	err := c.contract.Call(&bind.CallOpts{Context: context.Background()}, &result, "NETWORK_FEE_DENOMINATOR")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NETWORK_FEE_DENOMINATOR: %w", err)
 	}
 	return result[0].(*big.Int), nil
 }
@@ -77,25 +87,6 @@ func (c *Client) GetOperatorApproval(token, client, operator common.Address) (*t
 	}, nil
 }
 
-// GetAccumulatedFees returns the accumulated fees for a specific token
-func (c *Client) GetAccumulatedFees(token common.Address) (*big.Int, error) {
-	var result []interface{}
-	err := c.contract.Call(&bind.CallOpts{Context: context.Background()}, &result, "accumulatedFees", token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get accumulated fees: %w", err)
-	}
-	return result[0].(*big.Int), nil
-}
-
-// GetHasCollectedFees returns whether fees have been collected for a token
-func (c *Client) GetHasCollectedFees(token common.Address) (bool, error) {
-	var result []interface{}
-	err := c.contract.Call(&bind.CallOpts{Context: context.Background()}, &result, "hasCollectedFees", token)
-	if err != nil {
-		return false, fmt.Errorf("failed to get hasCollectedFees: %w", err)
-	}
-	return result[0].(bool), nil
-}
 
 // GetRail returns the rail information for a specific rail ID
 func (c *Client) GetRail(railId *big.Int) (*types.RailView, error) {
@@ -136,20 +127,6 @@ func (c *Client) GetRail(railId *big.Int) (*types.RailView, error) {
 	}, nil
 }
 
-// GetAllAccumulatedFees returns all accumulated fees across all tokens
-func (c *Client) GetAllAccumulatedFees() (*types.AccumulatedFeesResult, error) {
-	var result []interface{}
-	err := c.contract.Call(&bind.CallOpts{Context: context.Background()}, &result, "getAllAccumulatedFees")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get all accumulated fees: %w", err)
-	}
-
-	return &types.AccumulatedFeesResult{
-		Tokens:  result[0].([]common.Address),
-		Amounts: result[1].([]*big.Int),
-		Count:   result[2].(*big.Int),
-	}, nil
-}
 
 // GetRailsForPayerAndToken returns all rails for a payer and specific token
 func (c *Client) GetRailsForPayerAndToken(payer, token common.Address) ([]*types.RailInfo, error) {

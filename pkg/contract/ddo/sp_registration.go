@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"ddo-client/internal/types"
+	"github.com/Eastore-project/ddo-client/pkg/types"
 
 	"github.com/ethereum/go-ethereum/common"
 )

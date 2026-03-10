@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/urfave/cli/v2"
 
-	"ddo-client/internal/config"
+	"github.com/Eastore-project/ddo-client/internal/config"
 )
 
 // Query subcommands
@@ -91,32 +91,6 @@ func QueryRailCommand() *cli.Command {
 	}
 }
 
-func QueryAccumulatedFeesCommand() *cli.Command {
-	return &cli.Command{
-		Name:    "accumulated-fees",
-		Aliases: []string{"fees"},
-		Usage:   "Query accumulated fees for a token",
-		Flags: append(paymentsFlags, []cli.Flag{
-			&cli.StringFlag{
-				Name:     "token",
-				Aliases:  []string{"t"},
-				Usage:    "Token address",
-				Required: true,
-			},
-		}...),
-		Action: executeQueryAccumulatedFees,
-	}
-}
-
-func QueryAllAccountsCommand() *cli.Command {
-	return &cli.Command{
-		Name:    "all-accounts",
-		Aliases: []string{"all"},
-		Usage:   "Query all accounts with accumulated fees",
-		Flags:   paymentsFlags,
-		Action:  executeQueryAllAccounts, 
-	}
-}
 
 // Query command implementations
 
@@ -137,13 +111,18 @@ func executeQueryContractInfo(c *cli.Context) error {
 		return fmt.Errorf("failed to get commission max: %v", err)
 	}
 
-	paymentFee, err := client.GetPaymentFeeBPS()
+	feeNum, err := client.GetNetworkFeeNumerator()
 	if err != nil {
-		return fmt.Errorf("failed to get payment fee: %v", err)
+		return fmt.Errorf("failed to get network fee numerator: %v", err)
+	}
+
+	feeDenom, err := client.GetNetworkFeeDenominator()
+	if err != nil {
+		return fmt.Errorf("failed to get network fee denominator: %v", err)
 	}
 
 	fmt.Printf("   Commission Max BPS: %s\n", commissionMax.String())
-	fmt.Printf("   Payment Fee BPS: %s\n", paymentFee.String())
+	fmt.Printf("   Network Fee: %s/%s\n", feeNum.String(), feeDenom.String())
 	fmt.Println()
 
 	return nil
@@ -251,60 +230,4 @@ func executeQueryRail(c *cli.Context) error {
 	return nil
 }
 
-func executeQueryAccumulatedFees(c *cli.Context) error {
-	client, err := createPaymentsClient(c)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-
-	tokenAddr := common.HexToAddress(c.String("token"))
-
-	fmt.Printf("💸 Accumulated Fees:\n")
-	fmt.Printf("   Token: %s\n", tokenAddr.Hex())
-	fmt.Println()
-
-	fees, err := client.GetAccumulatedFees(tokenAddr)
-	if err != nil {
-		return fmt.Errorf("failed to get accumulated fees: %v", err)
-	}
-
-	hasCollected, err := client.GetHasCollectedFees(tokenAddr)
-	if err != nil {
-		return fmt.Errorf("failed to get hasCollectedFees: %v", err)
-	}
-
-	fmt.Printf("   Accumulated Fees: %s\n", fees.String())
-	fmt.Printf("   Has Collected: %t\n", hasCollected)
-	fmt.Println()
-
-	return nil
-}
-
-func executeQueryAllAccounts(c *cli.Context) error {
-	client, err := createPaymentsClient(c)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-
-	fmt.Printf("📊 All Accumulated Fees:\n")
-	fmt.Println()
-
-	result, err := client.GetAllAccumulatedFees()
-	if err != nil {
-		return fmt.Errorf("failed to get all accumulated fees: %v", err)
-	}
-
-	fmt.Printf("   Total Count: %s\n", result.Count.String())
-	fmt.Println()
-
-	for i := 0; i < len(result.Tokens) && i < len(result.Amounts); i++ {
-		fmt.Printf("   Token %d:\n", i+1)
-		fmt.Printf("     Address: %s\n", result.Tokens[i].Hex())
-		fmt.Printf("     Amount: %s\n", result.Amounts[i].String())
-		fmt.Println()
-	}
-
-	return nil
-} 
+ 

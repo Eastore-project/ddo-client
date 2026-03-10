@@ -6,9 +6,9 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	"ddo-client/internal/config"
-	"ddo-client/internal/contract/ddo"
-	"ddo-client/internal/utils"
+	"github.com/Eastore-project/ddo-client/internal/config"
+	"github.com/Eastore-project/ddo-client/pkg/contract/ddo"
+	"github.com/Eastore-project/ddo-client/pkg/utils"
 )
 
 func ListCommand() *cli.Command {

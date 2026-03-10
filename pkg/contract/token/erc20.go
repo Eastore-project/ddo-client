@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 
-	"ddo-client/internal/config"
+	"github.com/Eastore-project/ddo-client/internal/config"
 )
 
 // ERC20Client handles interactions with ERC20 tokens

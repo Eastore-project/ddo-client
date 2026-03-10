@@ -21,13 +21,13 @@ import (
 	"github.com/oklog/ulid/v2"
 	"github.com/urfave/cli/v2"
 
-	"ddo-client/internal/config"
-	"ddo-client/internal/contract/ddo"
-	"ddo-client/internal/contract/payments"
-	"ddo-client/internal/curio"
-	"ddo-client/internal/curio/cidconv"
-	"ddo-client/internal/types"
-	"ddo-client/internal/utils"
+	"github.com/Eastore-project/ddo-client/internal/config"
+	"github.com/Eastore-project/ddo-client/pkg/contract/ddo"
+	"github.com/Eastore-project/ddo-client/pkg/contract/payments"
+	"github.com/Eastore-project/ddo-client/pkg/curio"
+	"github.com/Eastore-project/ddo-client/pkg/curio/cidconv"
+	"github.com/Eastore-project/ddo-client/pkg/types"
+	"github.com/Eastore-project/ddo-client/pkg/utils"
 )
 
 func CreateFromFileCommand() *cli.Command {

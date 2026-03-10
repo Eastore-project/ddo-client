@@ -1,4 +1,4 @@
-module ddo-client
+module github.com/Eastore-project/ddo-client
 
 go 1.23
 

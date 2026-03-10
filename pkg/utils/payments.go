@@ -10,11 +10,11 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 
-	"ddo-client/internal/config"
-	"ddo-client/internal/contract/ddo"
-	"ddo-client/internal/contract/payments"
-	"ddo-client/internal/contract/token"
-	"ddo-client/internal/types"
+	"github.com/Eastore-project/ddo-client/internal/config"
+	"github.com/Eastore-project/ddo-client/pkg/contract/ddo"
+	"github.com/Eastore-project/ddo-client/pkg/contract/payments"
+	"github.com/Eastore-project/ddo-client/pkg/contract/token"
+	"github.com/Eastore-project/ddo-client/pkg/types"
 )
 
 const (

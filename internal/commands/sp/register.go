@@ -10,10 +10,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/urfave/cli/v2"
 
-	"ddo-client/internal/config"
-	"ddo-client/internal/contract/ddo"
-	"ddo-client/internal/types"
-	"ddo-client/internal/utils"
+	"github.com/Eastore-project/ddo-client/internal/config"
+	"github.com/Eastore-project/ddo-client/pkg/contract/ddo"
+	"github.com/Eastore-project/ddo-client/pkg/types"
+	"github.com/Eastore-project/ddo-client/pkg/utils"
 )
 
 func RegisterCommand() *cli.Command {

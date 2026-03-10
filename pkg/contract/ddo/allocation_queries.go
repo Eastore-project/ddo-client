@@ -6,7 +6,7 @@ import (
 	"math/big"
 	"reflect"
 
-	"ddo-client/internal/types"
+	"github.com/Eastore-project/ddo-client/pkg/types"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"

@@ -15,8 +15,6 @@ func PaymentsCommand() *cli.Command {
 			QueryAccountCommand(),
 			QueryOperatorApprovalCommand(),
 			QueryRailCommand(),
-			QueryAccumulatedFeesCommand(),
-			QueryAllAccountsCommand(),
 			// Transaction commands
 			SetOperatorAllowanceCommand(),
 			WithdrawCommand(),

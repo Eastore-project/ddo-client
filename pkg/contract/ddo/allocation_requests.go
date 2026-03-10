@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core/types"
 
-	ddotypes "ddo-client/internal/types"
+	ddotypes "github.com/Eastore-project/ddo-client/pkg/types"
 )
 
 // CreateAllocationRequests creates allocation requests on the contract

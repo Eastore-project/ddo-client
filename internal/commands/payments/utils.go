@@ -5,8 +5,8 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	"ddo-client/internal/config"
-	"ddo-client/internal/contract/payments"
+	"github.com/Eastore-project/ddo-client/internal/config"
+	"github.com/Eastore-project/ddo-client/pkg/contract/payments"
 )
 
 // createPaymentsClient creates a read-only payments client with command-line flag overrides

@@ -6,8 +6,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"ddo-client/internal/config"
-	"ddo-client/internal/types"
+	"github.com/Eastore-project/ddo-client/internal/config"
+	"github.com/Eastore-project/ddo-client/pkg/types"
 )
 
 // GetTokenBalances gets the token balances for an address from the supported tokens

@@ -9,8 +9,8 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/urfave/cli/v2"
 
-	"ddo-client/internal/config"
-	"ddo-client/internal/contract/ddo"
+	"github.com/Eastore-project/ddo-client/internal/config"
+	"github.com/Eastore-project/ddo-client/pkg/contract/ddo"
 )
 
 func QueryClaimInfoCommand() *cli.Command {

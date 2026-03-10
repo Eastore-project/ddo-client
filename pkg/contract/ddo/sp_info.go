@@ -1,7 +1,7 @@
 package ddo
 
 import (
-	"ddo-client/internal/types"
+	"github.com/Eastore-project/ddo-client/pkg/types"
 	"fmt"
 	"math/big"
 
