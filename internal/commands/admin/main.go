@@ -65,7 +65,7 @@ func setPaymentsContractCommand() *cli.Command {
 
 			addr := common.HexToAddress(c.String("address"))
 
-			ddoClient, err := ddo.NewClient()
+			ddoClient, err := ddo.NewClientWithParams(config.RPCEndpoint, config.ContractAddress, config.PrivateKey)
 			if err != nil {
 				return fmt.Errorf("failed to create DDO contract client: %v", err)
 			}
@@ -125,7 +125,7 @@ func setCommissionRateCommand() *cli.Command {
 
 			bps := new(big.Int).SetUint64(c.Uint64("bps"))
 
-			ddoClient, err := ddo.NewClient()
+			ddoClient, err := ddo.NewClientWithParams(config.RPCEndpoint, config.ContractAddress, config.PrivateKey)
 			if err != nil {
 				return fmt.Errorf("failed to create DDO contract client: %v", err)
 			}
@@ -188,7 +188,7 @@ func setLockupAmountCommand() *cli.Command {
 				return fmt.Errorf("invalid amount: %s", c.String("amount"))
 			}
 
-			ddoClient, err := ddo.NewClient()
+			ddoClient, err := ddo.NewClientWithParams(config.RPCEndpoint, config.ContractAddress, config.PrivateKey)
 			if err != nil {
 				return fmt.Errorf("failed to create DDO contract client: %v", err)
 			}
@@ -241,7 +241,7 @@ func pauseCommand() *cli.Command {
 				return fmt.Errorf("missing required configuration: %s", strings.Join(missing, ", "))
 			}
 
-			ddoClient, err := ddo.NewClient()
+			ddoClient, err := ddo.NewClientWithParams(config.RPCEndpoint, config.ContractAddress, config.PrivateKey)
 			if err != nil {
 				return fmt.Errorf("failed to create DDO contract client: %v", err)
 			}
@@ -294,7 +294,7 @@ func unpauseCommand() *cli.Command {
 				return fmt.Errorf("missing required configuration: %s", strings.Join(missing, ", "))
 			}
 
-			ddoClient, err := ddo.NewClient()
+			ddoClient, err := ddo.NewClientWithParams(config.RPCEndpoint, config.ContractAddress, config.PrivateKey)
 			if err != nil {
 				return fmt.Errorf("failed to create DDO contract client: %v", err)
 			}
@@ -344,7 +344,7 @@ func pausedCommand() *cli.Command {
 				config.RPCEndpoint = rpc
 			}
 
-			ddoClient, err := ddo.NewReadOnlyClient()
+			ddoClient, err := ddo.NewReadOnlyClientWithParams(config.RPCEndpoint, config.ContractAddress)
 			if err != nil {
 				return fmt.Errorf("failed to create DDO contract client: %v", err)
 			}
@@ -412,7 +412,7 @@ func blacklistSectorCommand() *cli.Command {
 			sectorNumber := c.Uint64("sector")
 			blacklisted := !c.Bool("remove")
 
-			ddoClient, err := ddo.NewClient()
+			ddoClient, err := ddo.NewClientWithParams(config.RPCEndpoint, config.ContractAddress, config.PrivateKey)
 			if err != nil {
 				return fmt.Errorf("failed to create DDO contract client: %v", err)
 			}
@@ -482,7 +482,7 @@ func isSectorBlacklistedCommand() *cli.Command {
 				config.RPCEndpoint = rpc
 			}
 
-			ddoClient, err := ddo.NewReadOnlyClient()
+			ddoClient, err := ddo.NewReadOnlyClientWithParams(config.RPCEndpoint, config.ContractAddress)
 			if err != nil {
 				return fmt.Errorf("failed to create DDO contract client: %v", err)
 			}

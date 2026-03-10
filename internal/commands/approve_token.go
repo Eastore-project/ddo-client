@@ -93,7 +93,7 @@ func executeApproveToken(c *cli.Context) error {
 	userAddress := crypto.PubkeyToAddress(privateKey.PublicKey)
 
 	// Create payments client to get contract address
-	paymentsClient, err := payments.NewReadOnlyClient()
+	paymentsClient, err := payments.NewReadOnlyClientWithParams(config.RPCEndpoint, config.PaymentsContractAddress)
 	if err != nil {
 		return fmt.Errorf("failed to create payments client: %v", err)
 	}
@@ -165,7 +165,7 @@ func executeApproveToken(c *cli.Context) error {
 	}
 
 	// Create ERC20 client for transactions
-	erc20Client, err := token.NewERC20Client(tokenAddress)
+	erc20Client, err := token.NewERC20ClientWithParams(config.RPCEndpoint, tokenAddress, config.PrivateKey)
 	if err != nil {
 		return fmt.Errorf("failed to create ERC20 client: %v", err)
 	}

@@ -12,8 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-
-	"github.com/Eastore-project/ddo-client/internal/config"
 )
 
 type Client struct {
@@ -23,20 +21,6 @@ type Client struct {
 	auth         *bind.TransactOpts
 	abi          abi.ABI
 	privateKey   *ecdsa.PrivateKey
-}
-
-// getContractABI returns the parsed ABI
-func getContractABI() abi.ABI {
-	parsedABI, err := abi.JSON(strings.NewReader(DDOClientABI))
-	if err != nil {
-		panic(fmt.Sprintf("failed to parse ABI: %v", err))
-	}
-	return parsedABI
-}
-
-// NewClient creates a new contract client using global config
-func NewClient() (*Client, error) {
-	return NewClientWithParams(config.RPCEndpoint, config.ContractAddress, config.PrivateKey)
 }
 
 // NewClientWithParams creates a new contract client with specific parameters
@@ -69,8 +53,6 @@ func NewClientWithParams(rpcEndpoint, contractAddress, privateKey string) (*Clie
 		return nil, fmt.Errorf("failed to create transactor: %w", err)
 	}
 
-	// Gas limit and gas price will be auto-estimated by the client
-
 	return &Client{
 		ethClient:    client,
 		contract:     contract,
@@ -81,35 +63,33 @@ func NewClientWithParams(rpcEndpoint, contractAddress, privateKey string) (*Clie
 	}, nil
 }
 
-// NewReadOnlyClient creates a new contract client for read-only operations (no private key required)
-func NewReadOnlyClient() (*Client, error) {
-	if config.ContractAddress == "" {
+// NewReadOnlyClientWithParams creates a new read-only contract client with specific parameters
+func NewReadOnlyClientWithParams(rpcEndpoint, contractAddress string) (*Client, error) {
+	if contractAddress == "" {
 		return nil, fmt.Errorf("contract address not set")
 	}
-	if config.RPCEndpoint == "" {
+	if rpcEndpoint == "" {
 		return nil, fmt.Errorf("RPC endpoint not set")
 	}
 
-	// Connect to Ethereum client
-	client, err := ethclient.Dial(config.RPCEndpoint)
+	client, err := ethclient.Dial(rpcEndpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to Ethereum client: %w", err)
 	}
 
-	// Parse contract address
-	contractAddress := common.HexToAddress(config.ContractAddress)
+	parsedABI, err := abi.JSON(strings.NewReader(DDOClientABI))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ABI: %w", err)
+	}
 
-	// Create bound contract (read-only)
-	contractABI := getContractABI()
-	boundContract := bind.NewBoundContract(contractAddress, contractABI, client, nil, nil)
+	addr := common.HexToAddress(contractAddress)
+	boundContract := bind.NewBoundContract(addr, parsedABI, client, nil, nil)
 
 	return &Client{
 		ethClient:    client,
 		contract:     boundContract,
-		contractAddr: contractAddress,
-		auth:         nil, // No auth for read-only operations
-		abi:          contractABI,
-		privateKey:   nil, // No private key for read-only operations
+		contractAddr: addr,
+		abi:          parsedABI,
 	}, nil
 }
 

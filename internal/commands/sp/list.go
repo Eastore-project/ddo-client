@@ -44,7 +44,7 @@ func executeListSPs(c *cli.Context) error {
 		return fmt.Errorf("missing DDO contract address (use --contract flag or DDO_CONTRACT_ADDRESS env var)")
 	}
 
-	ddoClient, err := ddo.NewReadOnlyClient()
+	ddoClient, err := ddo.NewReadOnlyClientWithParams(config.RPCEndpoint, config.ContractAddress)
 	if err != nil {
 		return fmt.Errorf("failed to create DDO contract client: %v", err)
 	}

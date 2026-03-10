@@ -12,8 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-
-	"github.com/Eastore-project/ddo-client/internal/config"
 )
 
 // ERC20Client handles interactions with ERC20 tokens
@@ -68,11 +66,6 @@ const ERC20ABI = `[
 		"type": "event"
 	}
 ]`
-
-// NewERC20Client creates a new ERC20 client for the specified token
-func NewERC20Client(tokenAddress string) (*ERC20Client, error) {
-	return NewERC20ClientWithParams(config.RPCEndpoint, tokenAddress, config.PrivateKey)
-}
 
 // NewERC20ClientWithParams creates a new ERC20 client with specific parameters
 func NewERC20ClientWithParams(rpcEndpoint, tokenAddress, privateKey string) (*ERC20Client, error) {

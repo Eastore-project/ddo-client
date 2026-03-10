@@ -94,7 +94,7 @@ func executeSettle(c *cli.Context) error {
 	}
 
 	// Create contract client
-	ddoClient, err := ddo.NewClient()
+	ddoClient, err := ddo.NewClientWithParams(config.RPCEndpoint, config.ContractAddress, config.PrivateKey)
 	if err != nil {
 		return fmt.Errorf("failed to create DDO contract client: %v", err)
 	}
@@ -166,7 +166,7 @@ func executeSettle(c *cli.Context) error {
 	}()
 
 	// Create payments client after configuring the address
-	paymentsClient, err := payments.NewReadOnlyClient()
+	paymentsClient, err := payments.NewReadOnlyClientWithParams(config.RPCEndpoint, config.PaymentsContractAddress)
 	if err != nil {
 		return fmt.Errorf("failed to create payments client: %v", err)
 	}

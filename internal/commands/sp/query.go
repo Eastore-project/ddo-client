@@ -62,7 +62,7 @@ func executeQuerySP(c *cli.Context) error {
 	actorId := c.Uint64("actor-id")
 
 	// Create read-only contract client
-	ddoClient, err := ddo.NewReadOnlyClient()
+	ddoClient, err := ddo.NewReadOnlyClientWithParams(config.RPCEndpoint, config.ContractAddress)
 	if err != nil {
 		return fmt.Errorf("failed to create DDO contract client: %v", err)
 	}

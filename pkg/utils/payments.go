@@ -10,7 +10,6 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 
-	"github.com/Eastore-project/ddo-client/internal/config"
 	"github.com/Eastore-project/ddo-client/pkg/contract/ddo"
 	"github.com/Eastore-project/ddo-client/pkg/contract/payments"
 	"github.com/Eastore-project/ddo-client/pkg/contract/token"
@@ -42,6 +41,8 @@ func CheckAndSetupPayments(
 	pieceInfos []types.PieceInfo,
 	userAddress common.Address,
 	contractAddress common.Address,
+	rpcEndpoint string,
+	privateKey string,
 ) error {
 	
 	// Calculate total storage costs
@@ -112,7 +113,7 @@ func CheckAndSetupPayments(
 			fmt.Printf("🔍 Checking ERC20 token allowance...\n")
 			
 			// Create ERC20 client
-			erc20Client, err := token.NewERC20Client(tokenAddress.Hex())
+			erc20Client, err := token.NewERC20ClientWithParams(rpcEndpoint, tokenAddress.Hex(), privateKey)
 			if err != nil {
 				return fmt.Errorf("failed to create ERC20 client: %w", err)
 			}
@@ -368,8 +369,9 @@ func CalculateTotalDataCap(pieceInfos []types.PieceInfo) *big.Int {
 
 // CheckTokenAllowanceAndBalance checks token balance and allowance for a user
 func CheckTokenAllowanceAndBalance(
-	tokenAddress string, 
-	userAddress, spenderAddress common.Address, 
+	rpcEndpoint string,
+	tokenAddress string,
+	userAddress, spenderAddress common.Address,
 	requiredAmount *big.Int,
 ) (balance, allowance *big.Int, err error) {
 	// Skip check for native tokens (ETH)
@@ -378,7 +380,7 @@ func CheckTokenAllowanceAndBalance(
 	}
 
 	// Create ERC20 client for read-only operations
-	erc20Client, err := token.NewERC20ReadOnlyClient(config.RPCEndpoint, tokenAddress)
+	erc20Client, err := token.NewERC20ReadOnlyClient(rpcEndpoint, tokenAddress)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create ERC20 client: %w", err)
 	}
@@ -401,6 +403,8 @@ func CheckTokenAllowanceAndBalance(
 
 // ApproveTokenIfNeeded approves tokens for spending if the current allowance is insufficient
 func ApproveTokenIfNeeded(
+	rpcEndpoint string,
+	privateKey string,
 	tokenAddress string,
 	userAddress, spenderAddress common.Address,
 	requiredAmount *big.Int,
@@ -411,7 +415,7 @@ func ApproveTokenIfNeeded(
 	}
 
 	// Create ERC20 client
-	erc20Client, err := token.NewERC20Client(tokenAddress)
+	erc20Client, err := token.NewERC20ClientWithParams(rpcEndpoint, tokenAddress, privateKey)
 	if err != nil {
 		return "", false, fmt.Errorf("failed to create ERC20 client: %w", err)
 	}

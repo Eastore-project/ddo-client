@@ -28,7 +28,7 @@ func createPaymentsClient(c *cli.Context) (*payments.Client, error) {
 	}
 
 	// Create read-only payments client
-	client, err := payments.NewReadOnlyClient()
+	client, err := payments.NewReadOnlyClientWithParams(config.RPCEndpoint, config.PaymentsContractAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create payments client: %v", err)
 	}

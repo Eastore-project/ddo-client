@@ -302,7 +302,7 @@ func executeCreateFromFile(c *cli.Context) error {
 	defer ethClient.Close()
 
 	// Create DDO contract client
-	ddoClient, err := ddo.NewClient()
+	ddoClient, err := ddo.NewClientWithParams(config.RPCEndpoint, config.ContractAddress, config.PrivateKey)
 	if err != nil {
 		return fmt.Errorf("failed to create DDO contract client: %v", err)
 	}
@@ -365,7 +365,7 @@ func executeCreateFromFile(c *cli.Context) error {
 	}
 
 	// Create payments client
-	paymentsClient, err := payments.NewClient()
+	paymentsClient, err := payments.NewClientWithParams(config.RPCEndpoint, config.PaymentsContractAddress, config.PrivateKey)
 	if err != nil {
 		return fmt.Errorf("failed to create payments contract client: %v", err)
 	}
@@ -382,6 +382,8 @@ func executeCreateFromFile(c *cli.Context) error {
 			pieceInfos,
 			userAddress,
 			contractAddress,
+			config.RPCEndpoint,
+			config.PrivateKey,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to setup payments: %v", err)

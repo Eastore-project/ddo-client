@@ -6,12 +6,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/Eastore-project/ddo-client/internal/config"
 	"github.com/Eastore-project/ddo-client/pkg/types"
 )
 
 // GetTokenBalances gets the token balances for an address from the supported tokens
-func GetTokenBalances(supportedTokens []types.TokenConfig, address common.Address) ([]types.TokenBalance, error) {
+func GetTokenBalances(rpcEndpoint string, supportedTokens []types.TokenConfig, address common.Address) ([]types.TokenBalance, error) {
 	var balances []types.TokenBalance
 	
 	for _, tokenConfig := range supportedTokens {
@@ -29,7 +28,7 @@ func GetTokenBalances(supportedTokens []types.TokenConfig, address common.Addres
 		}
 		
 		// Create read-only ERC20 client
-		erc20Client, err := NewERC20ReadOnlyClient(config.RPCEndpoint, tokenConfig.Token.Hex())
+		erc20Client, err := NewERC20ReadOnlyClient(rpcEndpoint, tokenConfig.Token.Hex())
 		if err != nil {
 			fmt.Printf("⚠️  Warning: failed to create ERC20 client for token %s: %v\n", 
 				tokenConfig.Token.Hex(), err)
@@ -55,8 +54,8 @@ func GetTokenBalances(supportedTokens []types.TokenConfig, address common.Addres
 	return balances, nil
 }
 // GetTokenBalanceResult gets token balances and returns a structured result
-func GetTokenBalanceResult(supportedTokens []types.TokenConfig, address common.Address) (*types.TokenBalanceResult, error) {
-	balances, err := GetTokenBalances(supportedTokens, address)
+func GetTokenBalanceResult(rpcEndpoint string, supportedTokens []types.TokenConfig, address common.Address) (*types.TokenBalanceResult, error) {
+	balances, err := GetTokenBalances(rpcEndpoint, supportedTokens, address)
 	if err != nil {
 		return nil, err
 	}

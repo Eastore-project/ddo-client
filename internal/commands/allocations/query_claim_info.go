@@ -92,7 +92,7 @@ func executeQueryClaimInfo(c *cli.Context) error {
 	}
 
 	// Create contract client (read-only, no private key needed)
-	client, err := ddo.NewReadOnlyClient()
+	client, err := ddo.NewReadOnlyClientWithParams(config.RPCEndpoint, config.ContractAddress)
 	if err != nil {
 		return fmt.Errorf("failed to create contract client: %v", err)
 	}

@@ -91,7 +91,7 @@ func executeWithdraw(c *cli.Context) error {
 
 	// Check balance if requested
 	if checkBalance {
-		paymentsClient, err := payments.NewReadOnlyClient()
+		paymentsClient, err := payments.NewReadOnlyClientWithParams(config.RPCEndpoint, config.PaymentsContractAddress)
 		if err != nil {
 			return fmt.Errorf("failed to create payments client: %v", err)
 		}
@@ -118,7 +118,7 @@ func executeWithdraw(c *cli.Context) error {
 	}
 
 	// Create payments client for transactions
-	paymentsTransactClient, err := payments.NewClient()
+	paymentsTransactClient, err := payments.NewClientWithParams(config.RPCEndpoint, config.PaymentsContractAddress, config.PrivateKey)
 	if err != nil {
 		return fmt.Errorf("failed to create payments transaction client: %v", err)
 	}
