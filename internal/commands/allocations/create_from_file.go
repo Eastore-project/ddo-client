@@ -13,6 +13,7 @@ import (
 	"github.com/eastore-project/fildeal/src/buffer"
 	dealutils "github.com/eastore-project/fildeal/src/deal/utils"
 	eabi "github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -301,8 +302,18 @@ func executeCreateFromFile(c *cli.Context) error {
 	}
 	defer ethClient.Close()
 
+	// Build transactor from the already-parsed private key
+	chainID, err := ethClient.ChainID(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get chain ID: %v", err)
+	}
+	auth, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		return fmt.Errorf("failed to create transactor: %v", err)
+	}
+
 	// Create DDO contract client
-	ddoClient, err := ddo.NewClientWithParams(config.RPCEndpoint, config.ContractAddress, config.PrivateKey)
+	ddoClient, err := ddo.NewClientWithTransactor(ethClient, config.ContractAddress, auth)
 	if err != nil {
 		return fmt.Errorf("failed to create DDO contract client: %v", err)
 	}
@@ -365,7 +376,7 @@ func executeCreateFromFile(c *cli.Context) error {
 	}
 
 	// Create payments client
-	paymentsClient, err := payments.NewClientWithParams(config.RPCEndpoint, config.PaymentsContractAddress, config.PrivateKey)
+	paymentsClient, err := payments.NewClientWithTransactor(ethClient, config.PaymentsContractAddress, auth)
 	if err != nil {
 		return fmt.Errorf("failed to create payments contract client: %v", err)
 	}
@@ -382,8 +393,7 @@ func executeCreateFromFile(c *cli.Context) error {
 			pieceInfos,
 			userAddress,
 			contractAddress,
-			config.RPCEndpoint,
-			config.PrivateKey,
+			auth,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to setup payments: %v", err)

@@ -27,13 +27,13 @@ const (
 
 // StorageCostResult contains the result of storage cost calculation
 type StorageCostResult struct {
-	TotalCost           *big.Int `json:"totalCost"`
+	TotalCost            *big.Int `json:"totalCost"`
 	PricePerBytePerEpoch *big.Int `json:"pricePerBytePerEpoch"`
-	TotalBytes          uint64   `json:"totalBytes"`
-	TotalEpochs         int64    `json:"totalEpochs"`
+	TotalBytes           uint64   `json:"totalBytes"`
+	TotalEpochs          int64    `json:"totalEpochs"`
 }
 
-// CheckAndSetupPayments handles the complete payment setup process
+// CheckAndSetupPayments handles the complete payment setup process.
 func CheckAndSetupPayments(
 	ethClient *ethclient.Client,
 	ddoClient *ddo.Client,
@@ -41,21 +41,20 @@ func CheckAndSetupPayments(
 	pieceInfos []types.PieceInfo,
 	userAddress common.Address,
 	contractAddress common.Address,
-	rpcEndpoint string,
-	privateKey string,
+	auth *bind.TransactOpts,
 ) error {
-	
+
 	// Calculate total storage costs
 	costResult, err := CalculateStorageCosts(ddoClient, pieceInfos)
 	if err != nil {
 		return fmt.Errorf("failed to calculate storage costs: %w", err)
 	}
 
-	    // Assume all pieces use the same token (we could enhance this later for multi-token support)
-    if len(pieceInfos) == 0 {
-        return fmt.Errorf("no pieces provided")
-    }
-    tokenAddress := pieceInfos[0].PaymentTokenAddress
+	// Assume all pieces use the same token (we could enhance this later for multi-token support)
+	if len(pieceInfos) == 0 {
+		return fmt.Errorf("no pieces provided")
+	}
+	tokenAddress := pieceInfos[0].PaymentTokenAddress
 
 	// Calculate one month allowance (for operator approval lockup allowance)
 	// This is: total_bytes * price_per_byte_per_epoch * epochs_per_month
@@ -107,17 +106,16 @@ func CheckAndSetupPayments(
 	if available.Cmp(requiredDeposit) < 0 {
 		deficit := new(big.Int).Sub(requiredDeposit, available)
 		fmt.Printf("⚠️  Insufficient funds. Need to deposit: %s\n", deficit.String())
-		
+
 		// For ERC20 tokens, check and approve allowance before depositing
 		if tokenAddress != common.HexToAddress("0x0") {
 			fmt.Printf("🔍 Checking ERC20 token allowance...\n")
-			
-			// Create ERC20 client
-			erc20Client, err := token.NewERC20ClientWithParams(rpcEndpoint, tokenAddress.Hex(), privateKey)
+
+			// Create ERC20 client using the caller-supplied transactor
+			erc20Client, err := token.NewERC20ClientWithTransactor(ethClient, tokenAddress.Hex(), auth)
 			if err != nil {
 				return fmt.Errorf("failed to create ERC20 client: %w", err)
 			}
-			defer erc20Client.Close()
 
 			// Check user's token balance
 			tokenBalance, err := erc20Client.GetBalance(userAddress)
@@ -137,7 +135,7 @@ func CheckAndSetupPayments(
 
 			if approved {
 				fmt.Printf("✅ Token allowance approved: %s\n", allowanceTx)
-				
+
 				// Wait for approval transaction to be mined before depositing
 				fmt.Printf("⏳ Waiting for allowance transaction to be mined...\n")
 				if err := WaitForTransaction(ethClient, allowanceTx); err != nil {
@@ -174,7 +172,7 @@ func CheckAndSetupPayments(
 	fmt.Printf("   Rate Usage: %s\n", operatorApproval.RateUsage.String())
 	fmt.Printf("   Lockup Usage: %s\n", operatorApproval.LockupUsage.String())
 	fmt.Println()
-		
+
 	// Set rate allowance to a large number for flexibility
 	rateAllowance := new(big.Int).Mul(costResult.PricePerBytePerEpoch, new(big.Int).SetUint64(costResult.TotalBytes))
 	// Lockup allowance must cover the contract's allocationLockupAmount (fixed lockup per rail)
@@ -184,52 +182,52 @@ func CheckAndSetupPayments(
 	perPieceLockup := new(big.Int).Set(allocationLockupAmount)
 	totalFixedLockup := new(big.Int).Mul(perPieceLockup, big.NewInt(int64(len(pieceInfos))))
 	lockupAllowance := new(big.Int).Mul(totalFixedLockup, big.NewInt(2))
-		var txHash string
-		if !operatorApproval.IsApproved || (new(big.Int).Sub(operatorApproval.RateAllowance, operatorApproval.RateUsage).Cmp(rateAllowance) < 0 && new(big.Int).Sub(operatorApproval.LockupAllowance, operatorApproval.LockupUsage).Cmp(lockupAllowance) < 0) {
-			fmt.Printf("🔧 Setting operator approval...\n")
-			txHash, err = paymentsClient.SetOperatorApproval(
-				tokenAddress,
-				contractAddress, // operator (DDO contract)
-				true,           // approved
-				new(big.Int).Add(operatorApproval.RateAllowance, rateAllowance),  // rate allowance
-				new(big.Int).Add(operatorApproval.LockupAllowance, lockupAllowance),   // lockup allowance (one month of payments)
-				big.NewInt(EPOCHS_PER_MONTH), // max lockup period (1 month)
-			) 
-			} else if new(big.Int).Sub(operatorApproval.RateAllowance, operatorApproval.RateUsage).Cmp(rateAllowance) < 0 {
-				fmt.Printf("🔧 Updating operator approval...\n")
-				txHash, err = paymentsClient.SetOperatorApproval(
-					tokenAddress,
-					contractAddress, // operator (DDO contract)
-					true,           // approved
-					new(big.Int).Add(operatorApproval.RateAllowance, rateAllowance),  // rate allowance
-					operatorApproval.LockupAllowance,   // lockup allowance same
-					big.NewInt(EPOCHS_PER_MONTH), // max lockup period (1 month)
-				)
-			} else if new(big.Int).Sub(operatorApproval.LockupAllowance, operatorApproval.LockupUsage).Cmp(lockupAllowance) < 0 {
-				fmt.Printf("🔧 Updating operator approval...\n")
-				txHash, err = paymentsClient.SetOperatorApproval(
-					tokenAddress,
-					contractAddress, // operator (DDO contract)
-					true,           // approved
-					operatorApproval.RateAllowance,  // rate allowance unchanged
-					new(big.Int).Add(operatorApproval.LockupAllowance, lockupAllowance),   // lockup allowance (one month of payments)
-					big.NewInt(EPOCHS_PER_MONTH), // max lockup period (1 month)
-				)
-			} else {
-				fmt.Printf("✅ Operator approval already sufficient\n")
-			}
+	var txHash string
+	if !operatorApproval.IsApproved || (new(big.Int).Sub(operatorApproval.RateAllowance, operatorApproval.RateUsage).Cmp(rateAllowance) < 0 && new(big.Int).Sub(operatorApproval.LockupAllowance, operatorApproval.LockupUsage).Cmp(lockupAllowance) < 0) {
+		fmt.Printf("🔧 Setting operator approval...\n")
+		txHash, err = paymentsClient.SetOperatorApproval(
+			tokenAddress,
+			contractAddress, // operator (DDO contract)
+			true,            // approved
+			new(big.Int).Add(operatorApproval.RateAllowance, rateAllowance),     // rate allowance
+			new(big.Int).Add(operatorApproval.LockupAllowance, lockupAllowance), // lockup allowance (one month of payments)
+			big.NewInt(EPOCHS_PER_MONTH),                                        // max lockup period (1 month)
+		)
+	} else if new(big.Int).Sub(operatorApproval.RateAllowance, operatorApproval.RateUsage).Cmp(rateAllowance) < 0 {
+		fmt.Printf("🔧 Updating operator approval...\n")
+		txHash, err = paymentsClient.SetOperatorApproval(
+			tokenAddress,
+			contractAddress, // operator (DDO contract)
+			true,            // approved
+			new(big.Int).Add(operatorApproval.RateAllowance, rateAllowance), // rate allowance
+			operatorApproval.LockupAllowance,                                // lockup allowance same
+			big.NewInt(EPOCHS_PER_MONTH),                                    // max lockup period (1 month)
+		)
+	} else if new(big.Int).Sub(operatorApproval.LockupAllowance, operatorApproval.LockupUsage).Cmp(lockupAllowance) < 0 {
+		fmt.Printf("🔧 Updating operator approval...\n")
+		txHash, err = paymentsClient.SetOperatorApproval(
+			tokenAddress,
+			contractAddress, // operator (DDO contract)
+			true,            // approved
+			operatorApproval.RateAllowance,                                      // rate allowance unchanged
+			new(big.Int).Add(operatorApproval.LockupAllowance, lockupAllowance), // lockup allowance (one month of payments)
+			big.NewInt(EPOCHS_PER_MONTH),                                        // max lockup period (1 month)
+		)
+	} else {
+		fmt.Printf("✅ Operator approval already sufficient\n")
+	}
 
-		if err != nil {
-			return fmt.Errorf("failed to set operator approval: %w", err)
+	if err != nil {
+		return fmt.Errorf("failed to set operator approval: %w", err)
+	}
+
+	if txHash != "" {
+		fmt.Printf("⏳ Waiting for operator approval transaction to be mined...\n")
+		if err := WaitForTransaction(ethClient, txHash); err != nil {
+			fmt.Printf("⚠️  Warning: operator approval transaction may not have been mined: %v\n", err)
 		}
-		
-		if txHash != "" {
-			fmt.Printf("⏳ Waiting for operator approval transaction to be mined...\n")
-			if err := WaitForTransaction(ethClient, txHash); err != nil {
-				fmt.Printf("⚠️  Warning: operator approval transaction may not have been mined: %v\n", err)
-			}
-			fmt.Printf("✅ Operator approval transaction sent: %s\n", txHash)
-		}
+		fmt.Printf("✅ Operator approval transaction sent: %s\n", txHash)
+	}
 
 	return nil
 }
@@ -242,13 +240,13 @@ func PromptUserConfirmation(totalStorageCost, requiredDeposit, oneMonthAllowance
 	fmt.Printf("   Required Deposit: %s\n", requiredDeposit.String())
 	fmt.Printf("   Operator Allowance: %s\n", oneMonthAllowance.String())
 	fmt.Println()
-	
+
 	fmt.Printf("⚠️  Before proceeding:\n")
 	fmt.Printf("1. Ensure you have enough tokens in your wallet\n")
 	fmt.Printf("2. Approve the payments contract to spend your tokens (if using ERC20)\n")
 	fmt.Printf("3. The system will deposit tokens and set operator approvals\n")
 	fmt.Println()
-	
+
 	// In a real CLI, you might want to add actual user confirmation prompt
 	// For now, we'll assume confirmation
 	return nil
@@ -273,26 +271,26 @@ func CalculateStorageCosts(ddoClient *ddo.Client, pieceInfos []types.PieceInfo) 
 			return nil, fmt.Errorf("invalid term length for piece provider %d: %d", piece.Provider, piece.TermMin)
 		}
 
-		        // Calculate cost for this specific piece
-        cost, err := ddoClient.CalculateStorageCost(
-            piece.Provider,
-            piece.PaymentTokenAddress,
-            piece.Size,
-            piece.TermMin,
-        )
+		// Calculate cost for this specific piece
+		cost, err := ddoClient.CalculateStorageCost(
+			piece.Provider,
+			piece.PaymentTokenAddress,
+			piece.Size,
+			piece.TermMin,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to calculate storage cost for provider %d: %w", piece.Provider, err)
 		}
 
-		        // Get price per byte per epoch for the first piece (assuming all use same rate)
-        if pricePerBytePerEpoch == nil {
-            pricePerBytePerEpoch, err = ddoClient.GetAndValidateSPPrice(piece.Provider, piece.PaymentTokenAddress)
-            if err != nil {
-                return nil, fmt.Errorf("failed to get SP price for provider %d: %w", piece.Provider, err)
-            }
-        }
+		// Get price per byte per epoch for the first piece (assuming all use same rate)
+		if pricePerBytePerEpoch == nil {
+			pricePerBytePerEpoch, err = ddoClient.GetAndValidateSPPrice(piece.Provider, piece.PaymentTokenAddress)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get SP price for provider %d: %w", piece.Provider, err)
+			}
+		}
 
-        key := fmt.Sprintf("%d-%s", piece.Provider, piece.PaymentTokenAddress.Hex())
+		key := fmt.Sprintf("%d-%s", piece.Provider, piece.PaymentTokenAddress.Hex())
 		if providerTokenCosts[key] == nil {
 			providerTokenCosts[key] = big.NewInt(0)
 		}
@@ -304,10 +302,10 @@ func CalculateStorageCosts(ddoClient *ddo.Client, pieceInfos []types.PieceInfo) 
 	}
 
 	return &StorageCostResult{
-		TotalCost:           totalCost,
+		TotalCost:            totalCost,
 		PricePerBytePerEpoch: pricePerBytePerEpoch,
-		TotalBytes:          totalBytes,
-		TotalEpochs:         totalEpochs,
+		TotalBytes:           totalBytes,
+		TotalEpochs:          totalEpochs,
 	}, nil
 }
 
@@ -316,21 +314,21 @@ func WaitForTransaction(client *ethclient.Client, txHash string) error {
 	if txHash == "" {
 		return nil
 	}
-	
+
 	hash := common.HexToHash(txHash)
 	fmt.Printf("⏳ Waiting for transaction %s to be mined...\n", txHash)
-	
+
 	// Get the transaction first
 	tx, _, err := client.TransactionByHash(context.Background(), hash)
 	if err != nil {
 		return fmt.Errorf("failed to get transaction: %w", err)
 	}
-	
+
 	_, err = bind.WaitMined(context.Background(), client, tx)
 	if err != nil {
 		return fmt.Errorf("transaction failed or timed out: %w", err)
 	}
-	
+
 	fmt.Printf("✅ Transaction mined successfully\n")
 	return nil
 }
@@ -359,11 +357,11 @@ func WaitForTransactionWithReceipt(client *ethclient.Client, txHash string) (*et
 // CalculateTotalDataCap calculates the total DataCap needed (sum of all piece sizes)
 func CalculateTotalDataCap(pieceInfos []types.PieceInfo) *big.Int {
 	totalDataCap := big.NewInt(0)
-	
+
 	for _, piece := range pieceInfos {
 		totalDataCap.Add(totalDataCap, big.NewInt(int64(piece.Size)))
 	}
-	
+
 	return totalDataCap
 }
 
@@ -403,8 +401,8 @@ func CheckTokenAllowanceAndBalance(
 
 // ApproveTokenIfNeeded approves tokens for spending if the current allowance is insufficient
 func ApproveTokenIfNeeded(
-	rpcEndpoint string,
-	privateKey string,
+	ethClient *ethclient.Client,
+	auth *bind.TransactOpts,
 	tokenAddress string,
 	userAddress, spenderAddress common.Address,
 	requiredAmount *big.Int,
@@ -415,11 +413,10 @@ func ApproveTokenIfNeeded(
 	}
 
 	// Create ERC20 client
-	erc20Client, err := token.NewERC20ClientWithParams(rpcEndpoint, tokenAddress, privateKey)
+	erc20Client, err := token.NewERC20ClientWithTransactor(ethClient, tokenAddress, auth)
 	if err != nil {
 		return "", false, fmt.Errorf("failed to create ERC20 client: %w", err)
 	}
-	defer erc20Client.Close()
 
 	// Check and approve if needed
 	txHash, wasApproved, err = erc20Client.CheckAndApprove(userAddress, spenderAddress, requiredAmount)
@@ -433,18 +430,18 @@ func ApproveTokenIfNeeded(
 // FormatBytes formats a byte count into a human-readable string
 func FormatBytes(bytes *big.Int) string {
 	const unit = 1024
-	
+
 	// Convert to float64 for calculation
 	b := new(big.Float).SetInt(bytes)
-	
+
 	if bytes.Cmp(big.NewInt(unit)) < 0 {
 		return fmt.Sprintf("%s B", bytes.String())
 	}
-	
+
 	div := big.NewFloat(unit)
 	exp := 0
 	units := []string{"B", "KB", "MB", "GB", "TB", "PB"}
-	
+
 	for {
 		next := new(big.Float).Quo(b, div)
 		if next.Cmp(big.NewFloat(unit)) < 0 || exp >= len(units)-1 {
@@ -453,7 +450,7 @@ func FormatBytes(bytes *big.Int) string {
 		b = next
 		exp++
 	}
-	
+
 	// Format with 2 decimal places
 	f, _ := b.Float64()
 	return fmt.Sprintf("%.2f %s", f, units[exp])
@@ -468,7 +465,7 @@ func ConvertTBPerMonthToBytesPerEpoch(pricePerTBPerMonth *big.Int) *big.Int {
 		big.NewInt(BYTES_PER_TB),
 		big.NewInt(EPOCHS_PER_MONTH),
 	)
-	
+
 	result := new(big.Int).Div(pricePerTBPerMonth, denominator)
 	return result
 }
@@ -515,11 +512,11 @@ func ConvertUSDPerTBPerMonthToBytesPerEpoch(usdPriceStr string) (*big.Int, error
 func ConvertTokenUnitsToUSD(tokenUnits *big.Int) string {
 	// Convert token units to float
 	tokenFloat := new(big.Float).SetInt(tokenUnits)
-	
+
 	// Divide by 10^USD_DECIMALS
 	decimalsMultiplier := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(USD_DECIMALS), nil))
 	usdFloat := new(big.Float).Quo(tokenFloat, decimalsMultiplier)
-	
+
 	// Format to 2 decimal places
 	return fmt.Sprintf("%.2f", usdFloat)
 }
@@ -528,8 +525,8 @@ func ConvertTokenUnitsToUSD(tokenUnits *big.Int) string {
 func FormatPriceBothFormats(pricePerBytePerEpoch *big.Int) string {
 	pricePerTBPerMonth := ConvertBytesPerEpochToTBPerMonth(pricePerBytePerEpoch)
 	usdPricePerTB := ConvertTokenUnitsToUSD(pricePerTBPerMonth)
-	return fmt.Sprintf("$%s USD per TB per month (%s token units per byte per epoch)", 
-		usdPricePerTB, 
+	return fmt.Sprintf("$%s USD per TB per month (%s token units per byte per epoch)",
+		usdPricePerTB,
 		pricePerBytePerEpoch.String())
 }
 
@@ -538,8 +535,8 @@ func FormatPriceWithUnit(pricePerBytePerEpoch *big.Int, showBothFormats bool) st
 	if showBothFormats {
 		return FormatPriceBothFormats(pricePerBytePerEpoch)
 	}
-	
+
 	pricePerTBPerMonth := ConvertBytesPerEpochToTBPerMonth(pricePerBytePerEpoch)
 	usdPricePerTB := ConvertTokenUnitsToUSD(pricePerTBPerMonth)
 	return fmt.Sprintf("$%s USD per TB per month", usdPricePerTB)
-} 
+}
