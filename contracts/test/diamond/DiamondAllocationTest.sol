@@ -120,12 +120,7 @@ contract DiamondAllocationTest is DiamondBaseTest {
         testToken.approve(address(paymentsContract), type(uint256).max);
         paymentsContract.deposit(IERC20(address(testToken)), poorClient, 1 * 10 ** 13);
         paymentsContract.setOperatorApproval(
-            IERC20(address(testToken)),
-            address(diamond),
-            true,
-            type(uint256).max,
-            type(uint256).max,
-            type(uint256).max
+            IERC20(address(testToken)), address(diamond), true, type(uint256).max, type(uint256).max, type(uint256).max
         );
         vm.stopPrank();
 
@@ -156,8 +151,10 @@ contract DiamondAllocationTest is DiamondBaseTest {
 
         bytes memory serialized = ddoClient.serializeVerifregOperatorData(allocationRequests);
 
-        (LibDDOStorage.ProviderClaim[] memory claimExtensions, LibDDOStorage.AllocationRequest[] memory deserializedRequests) =
-            ddoClient.deserializeVerifregOperatorData(serialized);
+        (
+            LibDDOStorage.ProviderClaim[] memory claimExtensions,
+            LibDDOStorage.AllocationRequest[] memory deserializedRequests
+        ) = ddoClient.deserializeVerifregOperatorData(serialized);
 
         assertEq(claimExtensions.length, 0, "Should have no claim extensions");
         assertEq(deserializedRequests.length, 1, "Should have 1 allocation request");
@@ -289,11 +286,7 @@ contract DiamondAllocationTest is DiamondBaseTest {
         (,,,,,, uint256 railId,,) = viewDiamond.allocationInfos(allocationId);
 
         bytes memory cborParams = _buildSinglePieceCBOR(
-            1,
-            int64(int256(block.number)),
-            pieceInfos[0].pieceCid,
-            uint64(PIECE_SIZE),
-            allocationId
+            1, int64(int256(block.number)), pieceInfos[0].pieceCid, uint64(PIECE_SIZE), allocationId
         );
 
         vm.prank(sp1MinerAddress);

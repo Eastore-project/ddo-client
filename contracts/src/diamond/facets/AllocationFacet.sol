@@ -121,7 +121,10 @@ contract AllocationFacet {
         return s.paymentsContract.settleRail(info.railId, untilEpoch);
     }
 
-    function settleSpTotalPayment(uint64 providerId, uint256 untilEpoch, uint256 startIndex, uint256 batchSize) external returns (uint256 settledCount) {
+    function settleSpTotalPayment(uint64 providerId, uint256 untilEpoch, uint256 startIndex, uint256 batchSize)
+        external
+        returns (uint256 settledCount)
+    {
         LibDDOStorage.DDOState storage s = LibDDOStorage.getStorage();
         uint64[] memory allocationIds = s.allocationIdsByProvider[providerId];
         if (allocationIds.length == 0) revert LibDDOStorage.DDOTypes__NoAllocationsFoundForProvider();
@@ -221,15 +224,15 @@ contract AllocationFacet {
 
         LibDDOStorage.DDOState storage s = LibDDOStorage.getStorage();
 
-        uint byteIdx;
-        uint sectorCount;
+        uint256 byteIdx;
+        uint256 sectorCount;
         (sectorCount, byteIdx) = params.readFixedArray(byteIdx);
 
         CBOR.CBORBuffer memory retBuf = CBOR.create(256);
         retBuf.startFixedArray(uint64(sectorCount));
 
-        for (uint sc; sc < sectorCount; sc++) {
-            uint sectorTupleLen;
+        for (uint256 sc; sc < sectorCount; sc++) {
+            uint256 sectorTupleLen;
             (sectorTupleLen, byteIdx) = params.readFixedArray(byteIdx);
 
             uint64 sectorNumber;
@@ -238,13 +241,13 @@ contract AllocationFacet {
             int64 minCommitEpoch;
             (minCommitEpoch, byteIdx) = params.readInt64(byteIdx);
 
-            uint pieceCount;
+            uint256 pieceCount;
             (pieceCount, byteIdx) = params.readFixedArray(byteIdx);
 
             retBuf.startFixedArray(uint64(pieceCount));
 
-            for (uint p; p < pieceCount; p++) {
-                uint pieceTupleLen;
+            for (uint256 p; p < pieceCount; p++) {
+                uint256 pieceTupleLen;
                 (pieceTupleLen, byteIdx) = params.readFixedArray(byteIdx);
 
                 bytes memory dataCid;
@@ -253,7 +256,7 @@ contract AllocationFacet {
                 // Strip CBOR tag 42 0x00 prefix from CID bytes
                 if (dataCid.length > 0 && dataCid[0] == 0x00) {
                     bytes memory stripped = new bytes(dataCid.length - 1);
-                    for (uint i; i < stripped.length; i++) {
+                    for (uint256 i; i < stripped.length; i++) {
                         stripped[i] = dataCid[i + 1];
                     }
                     dataCid = stripped;

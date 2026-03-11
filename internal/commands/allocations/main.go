@@ -15,4 +15,4 @@ func AllocationsCommand() *cli.Command {
 			QueryClaimInfoCommand(),
 		},
 	}
-} 
+}

@@ -243,4 +243,4 @@ func executeSetOperatorAllowance(c *cli.Context) error {
 	fmt.Printf("   Max Lockup Period: %s epochs\n", newApproval.MaxLockupPeriod.String())
 
 	return nil
-} 
+}

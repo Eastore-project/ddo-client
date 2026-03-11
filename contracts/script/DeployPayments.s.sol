@@ -12,10 +12,7 @@ contract DeployPaymentsScript is Script {
 
         // Deploy the payments contract directly (no proxy)
         FilecoinPayV1 paymentsContract = new FilecoinPayV1();
-        console.log(
-            "FilecoinPayV1 deployed at:",
-            address(paymentsContract)
-        );
+        console.log("FilecoinPayV1 deployed at:", address(paymentsContract));
 
         vm.stopBroadcast();
 

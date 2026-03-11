@@ -261,35 +261,23 @@ contract DiamondBaseTest is Test {
         });
 
         spDiamond.registerSP(
-            SP1_ACTOR_ID,
-            sp1PaymentAddress,
-            1024,
-            uint64(PIECE_SIZE * 2),
-            86400,
-            5256000,
-            tokenConfigs
+            SP1_ACTOR_ID, sp1PaymentAddress, 1024, uint64(PIECE_SIZE * 2), 86400, 5256000, tokenConfigs
         );
 
         spDiamond.registerSP(
-            SP2_ACTOR_ID,
-            sp2PaymentAddress,
-            1024,
-            uint64(PIECE_SIZE * 2),
-            86400,
-            5256000,
-            tokenConfigs
+            SP2_ACTOR_ID, sp2PaymentAddress, 1024, uint64(PIECE_SIZE * 2), 86400, 5256000, tokenConfigs
         );
     }
 
     function _setupClientTokens() internal {
         vm.startPrank(client1);
-        for (uint i = 0; i < 10; i++) {
+        for (uint256 i = 0; i < 10; i++) {
             testToken.mint();
         }
         vm.stopPrank();
 
         vm.startPrank(client2);
-        for (uint i = 0; i < 10; i++) {
+        for (uint256 i = 0; i < 10; i++) {
             testToken.mint();
         }
         vm.stopPrank();
@@ -302,12 +290,7 @@ contract DiamondBaseTest is Test {
         testToken.approve(address(paymentsContract), type(uint256).max);
         paymentsContract.deposit(IERC20(address(testToken)), client1, depositAmount);
         paymentsContract.setOperatorApproval(
-            IERC20(address(testToken)),
-            address(diamond),
-            true,
-            type(uint256).max,
-            type(uint256).max,
-            type(uint256).max
+            IERC20(address(testToken)), address(diamond), true, type(uint256).max, type(uint256).max, type(uint256).max
         );
         vm.stopPrank();
 
@@ -315,12 +298,7 @@ contract DiamondBaseTest is Test {
         testToken.approve(address(paymentsContract), type(uint256).max);
         paymentsContract.deposit(IERC20(address(testToken)), client2, depositAmount);
         paymentsContract.setOperatorApproval(
-            IERC20(address(testToken)),
-            address(diamond),
-            true,
-            type(uint256).max,
-            type(uint256).max,
-            type(uint256).max
+            IERC20(address(testToken)), address(diamond), true, type(uint256).max, type(uint256).max, type(uint256).max
         );
         vm.stopPrank();
     }

@@ -444,3 +444,23 @@ Curio deal submission is **opt-in** — pass `--curio-upload` (or set `CURIO_UPL
 | `CURIO_API` | Optional | Override Curio MK20 API URL (skips auto-discovery) |
 
 All env vars can be overridden with CLI flags (`--rpc`, `--contract`, `--private-key`, `--payments-contract`, etc.).
+
+## Contributing
+
+### Code Formatting
+
+All Go code must be formatted with `gofmt` before submitting a PR. Unformatted code will not be merged.
+
+```bash
+# Format all Go files
+gofmt -w .
+
+# Check for formatting issues without modifying files
+gofmt -l .
+```
+
+For Solidity contracts, use `forge fmt` from the `contracts/` directory:
+
+```bash
+cd contracts && forge fmt
+```

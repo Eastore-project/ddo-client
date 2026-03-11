@@ -16,12 +16,12 @@ type Account struct {
 
 // OperatorApproval represents the OperatorApproval struct from the Payments contract
 type OperatorApproval struct {
-	IsApproved       bool     `json:"isApproved"`
-	RateAllowance    *big.Int `json:"rateAllowance"`
-	LockupAllowance  *big.Int `json:"lockupAllowance"`
-	RateUsage        *big.Int `json:"rateUsage"`
-	LockupUsage      *big.Int `json:"lockupUsage"`
-	MaxLockupPeriod  *big.Int `json:"maxLockupPeriod"`
+	IsApproved      bool     `json:"isApproved"`
+	RateAllowance   *big.Int `json:"rateAllowance"`
+	LockupAllowance *big.Int `json:"lockupAllowance"`
+	RateUsage       *big.Int `json:"rateUsage"`
+	LockupUsage     *big.Int `json:"lockupUsage"`
+	MaxLockupPeriod *big.Int `json:"maxLockupPeriod"`
 }
 
 // RailView represents the RailView struct from the Payments contract
@@ -49,12 +49,12 @@ type RailInfo struct {
 
 // SettlementResult represents the return values from settlement functions
 type SettlementResult struct {
-	TotalSettledAmount        *big.Int `json:"totalSettledAmount"`
-	TotalNetPayeeAmount       *big.Int `json:"totalNetPayeeAmount"`
-	TotalPaymentFee           *big.Int `json:"totalPaymentFee"`
-	TotalOperatorCommission   *big.Int `json:"totalOperatorCommission"`
-	FinalSettledEpoch         *big.Int `json:"finalSettledEpoch"`
-	Note                      string   `json:"note"`
+	TotalSettledAmount      *big.Int `json:"totalSettledAmount"`
+	TotalNetPayeeAmount     *big.Int `json:"totalNetPayeeAmount"`
+	TotalPaymentFee         *big.Int `json:"totalPaymentFee"`
+	TotalOperatorCommission *big.Int `json:"totalOperatorCommission"`
+	FinalSettledEpoch       *big.Int `json:"finalSettledEpoch"`
+	Note                    string   `json:"note"`
 }
 
 // AccumulatedFeesResult represents the return from getAllAccumulatedFees
@@ -62,4 +62,4 @@ type AccumulatedFeesResult struct {
 	Tokens  []common.Address `json:"tokens"`
 	Amounts []*big.Int       `json:"amounts"`
 	Count   *big.Int         `json:"count"`
-} 
+}

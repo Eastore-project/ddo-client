@@ -208,7 +208,10 @@ contract MockAllocationFacet {
         return s.paymentsContract.settleRail(info.railId, untilEpoch);
     }
 
-    function settleSpTotalPayment(uint64 providerId, uint256 untilEpoch, uint256 startIndex, uint256 batchSize) external returns (uint256 settledCount) {
+    function settleSpTotalPayment(uint64 providerId, uint256 untilEpoch, uint256 startIndex, uint256 batchSize)
+        external
+        returns (uint256 settledCount)
+    {
         LibDDOStorage.DDOState storage s = LibDDOStorage.getStorage();
         uint64[] memory allocationIds = s.allocationIdsByProvider[providerId];
         if (allocationIds.length == 0) revert LibDDOStorage.DDOTypes__NoAllocationsFoundForProvider();
@@ -234,7 +237,10 @@ contract MockAllocationFacet {
     function deserializeVerifregOperatorData(bytes memory cborData)
         external
         pure
-        returns (LibDDOStorage.ProviderClaim[] memory claimExtensions, LibDDOStorage.AllocationRequest[] memory allocationRequests)
+        returns (
+            LibDDOStorage.ProviderClaim[] memory claimExtensions,
+            LibDDOStorage.AllocationRequest[] memory allocationRequests
+        )
     {
         return VerifRegSerializationDiamond.deserializeVerifregOperatorData(cborData);
     }
@@ -333,15 +339,15 @@ contract MockAllocationFacet {
         LibDDOStorage.DDOState storage s = LibDDOStorage.getStorage();
         uint64 minerActorId = s.mockMinerActorIds[msg.sender];
 
-        uint byteIdx;
-        uint sectorCount;
+        uint256 byteIdx;
+        uint256 sectorCount;
         (sectorCount, byteIdx) = params.readFixedArray(byteIdx);
 
         CBOR.CBORBuffer memory retBuf = CBOR.create(256);
         retBuf.startFixedArray(uint64(sectorCount));
 
-        for (uint sc; sc < sectorCount; sc++) {
-            uint sectorTupleLen;
+        for (uint256 sc; sc < sectorCount; sc++) {
+            uint256 sectorTupleLen;
             (sectorTupleLen, byteIdx) = params.readFixedArray(byteIdx);
 
             uint64 sectorNumber;
@@ -350,13 +356,13 @@ contract MockAllocationFacet {
             int64 minCommitEpoch;
             (minCommitEpoch, byteIdx) = params.readInt64(byteIdx);
 
-            uint pieceCount;
+            uint256 pieceCount;
             (pieceCount, byteIdx) = params.readFixedArray(byteIdx);
 
             retBuf.startFixedArray(uint64(pieceCount));
 
-            for (uint p; p < pieceCount; p++) {
-                uint pieceTupleLen;
+            for (uint256 p; p < pieceCount; p++) {
+                uint256 pieceTupleLen;
                 (pieceTupleLen, byteIdx) = params.readFixedArray(byteIdx);
 
                 bytes memory dataCid;

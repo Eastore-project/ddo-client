@@ -74,7 +74,9 @@ contract DiamondSettlementTest is DiamondBaseTest {
 
         assertEq(finalClientFunds, initialClientFunds - totalSettledAmount, "Client should pay the settled amount");
         assertEq(finalSpFunds, initialSpFunds + totalNetPayeeAmount, "SP should receive net payment amount");
-        assertEq(finalOperatorFunds, initialOperatorFunds + totalOperatorCommission, "Operator should receive commission");
+        assertEq(
+            finalOperatorFunds, initialOperatorFunds + totalOperatorCommission, "Operator should receive commission"
+        );
 
         FilecoinPayV1.RailView memory railAfterSettlement = paymentsContract.getRail(railId);
         assertEq(railAfterSettlement.settledUpTo, finalSettledEpoch, "Rail should be settled up to final epoch");
@@ -131,14 +133,12 @@ contract DiamondSettlementTest is DiamondBaseTest {
 
         ddoClient.mockActivateAllocation(allocationId);
 
-        (,, uint256 unlockedFunds,) =
-            paymentsContract.getAccountInfoIfSettled(IERC20(address(testToken)), client1);
+        (,, uint256 unlockedFunds,) = paymentsContract.getAccountInfoIfSettled(IERC20(address(testToken)), client1);
         uint256 leaveFundsForBlocks = 10;
 
         vm.prank(client1);
         paymentsContract.withdraw(
-            IERC20(address(testToken)),
-            unlockedFunds - PRICE_PER_BYTE_PER_EPOCH * PIECE_SIZE * leaveFundsForBlocks
+            IERC20(address(testToken)), unlockedFunds - PRICE_PER_BYTE_PER_EPOCH * PIECE_SIZE * leaveFundsForBlocks
         );
 
         uint256 settlementEpoch = block.number + 10000 + adminDiamond.EPOCHS_PER_MONTH();
@@ -247,10 +247,8 @@ contract DiamondSettlementTest is DiamondBaseTest {
 
         // Settle — should succeed now
         vm.prank(client1);
-        (
-            uint256 totalSettledAmount,
-            uint256 totalNetPayeeAmount,,,,
-        ) = ddoClient.mockSettleSpPayment(allocationId, settlementEpoch);
+        (uint256 totalSettledAmount, uint256 totalNetPayeeAmount,,,,) =
+            ddoClient.mockSettleSpPayment(allocationId, settlementEpoch);
 
         assertTrue(totalSettledAmount > 0, "Settlement should succeed after unblacklisting");
         assertTrue(totalNetPayeeAmount > 0, "SP should receive payment after unblacklisting");

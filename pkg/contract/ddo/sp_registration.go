@@ -17,20 +17,20 @@ func (c *Client) RegisterSP(params types.SPRegistrationParams) (string, error) {
 
 	// Convert TokenConfig slice to the format expected by the contract
 	contractTokenConfigs := make([]struct {
-		Token               common.Address
+		Token                common.Address
 		PricePerBytePerEpoch *big.Int
-		IsActive            bool
+		IsActive             bool
 	}, len(params.TokenConfigs))
 
 	for i, tc := range params.TokenConfigs {
 		contractTokenConfigs[i] = struct {
-			Token               common.Address
+			Token                common.Address
 			PricePerBytePerEpoch *big.Int
-			IsActive            bool
+			IsActive             bool
 		}{
-			Token:               tc.Token,
+			Token:                tc.Token,
 			PricePerBytePerEpoch: tc.PricePerBytePerEpoch,
-			IsActive:            tc.IsActive,
+			IsActive:             tc.IsActive,
 		}
 	}
 

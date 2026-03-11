@@ -24,7 +24,7 @@ func (c *Client) GetAllocationRailInfo(allocationId uint64) (uint64, uint64, *ty
 
 	railId := results[0].(*big.Int).Uint64()
 	providerId := results[1].(uint64)
-	
+
 	// Parse the rail view struct - match the actual struct with JSON tags
 	railViewData := results[2].(struct {
 		Token               common.Address `json:"token"`
@@ -40,7 +40,7 @@ func (c *Client) GetAllocationRailInfo(allocationId uint64) (uint64, uint64, *ty
 		CommissionRateBps   *big.Int       `json:"commissionRateBps"`
 		ServiceFeeRecipient common.Address `json:"serviceFeeRecipient"`
 	})
-	
+
 	railView := &types.RailView{
 		Token:               railViewData.Token,
 		From:                railViewData.From,

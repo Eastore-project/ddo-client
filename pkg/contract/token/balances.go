@@ -12,12 +12,12 @@ import (
 // GetTokenBalances gets the token balances for an address from the supported tokens
 func GetTokenBalances(rpcEndpoint string, supportedTokens []types.TokenConfig, address common.Address) ([]types.TokenBalance, error) {
 	var balances []types.TokenBalance
-	
+
 	for _, tokenConfig := range supportedTokens {
 		if !tokenConfig.IsActive {
 			continue
 		}
-		
+
 		// Skip native token (address 0x0) as it's handled differently
 		if tokenConfig.Token == common.HexToAddress("0x0") {
 			balances = append(balances, types.TokenBalance{
@@ -26,42 +26,43 @@ func GetTokenBalances(rpcEndpoint string, supportedTokens []types.TokenConfig, a
 			})
 			continue
 		}
-		
+
 		// Create read-only ERC20 client
 		erc20Client, err := NewERC20ReadOnlyClient(rpcEndpoint, tokenConfig.Token.Hex())
 		if err != nil {
-			fmt.Printf("⚠️  Warning: failed to create ERC20 client for token %s: %v\n", 
+			fmt.Printf("⚠️  Warning: failed to create ERC20 client for token %s: %v\n",
 				tokenConfig.Token.Hex(), err)
 			continue
 		}
-		
+
 		balance, err := erc20Client.GetBalance(address)
 		if err != nil {
-			fmt.Printf("⚠️  Warning: failed to get balance for token %s: %v\n", 
+			fmt.Printf("⚠️  Warning: failed to get balance for token %s: %v\n",
 				tokenConfig.Token.Hex(), err)
 			erc20Client.Close()
 			continue
 		}
-		
+
 		balances = append(balances, types.TokenBalance{
 			TokenAddress: tokenConfig.Token,
 			Balance:      balance,
 		})
-		
+
 		erc20Client.Close()
 	}
-	
+
 	return balances, nil
 }
+
 // GetTokenBalanceResult gets token balances and returns a structured result
 func GetTokenBalanceResult(rpcEndpoint string, supportedTokens []types.TokenConfig, address common.Address) (*types.TokenBalanceResult, error) {
 	balances, err := GetTokenBalances(rpcEndpoint, supportedTokens, address)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &types.TokenBalanceResult{
 		Address:  address,
 		Balances: balances,
 	}, nil
-} 
+}

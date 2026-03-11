@@ -87,7 +87,6 @@ func (c *Client) GetOperatorApproval(token, client, operator common.Address) (*t
 	}, nil
 }
 
-
 // GetRail returns the rail information for a specific rail ID
 func (c *Client) GetRail(railId *big.Int) (*types.RailView, error) {
 	var result []interface{}
@@ -126,7 +125,6 @@ func (c *Client) GetRail(railId *big.Int) (*types.RailView, error) {
 		ServiceFeeRecipient: railStruct.ServiceFeeRecipient,
 	}, nil
 }
-
 
 // GetRailsForPayerAndToken returns all rails for a payer and specific token
 func (c *Client) GetRailsForPayerAndToken(payer, token common.Address) ([]*types.RailInfo, error) {
@@ -188,4 +186,4 @@ func (c *Client) GetRailsForPayeeAndToken(payee, token common.Address) ([]*types
 	}
 
 	return railInfos, nil
-} 
+}

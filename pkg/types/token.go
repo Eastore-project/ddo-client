@@ -20,9 +20,9 @@ type TokenBalanceResult struct {
 
 // TokenBalanceComparison contains before/after balance comparison
 type TokenBalanceComparison struct {
-	TokenAddress   common.Address `json:"tokenAddress"`
-	BeforeBalance  *big.Int       `json:"beforeBalance"`
-	AfterBalance   *big.Int       `json:"afterBalance"`
-	Difference     *big.Int       `json:"difference"`
-	HasChange      bool           `json:"hasChange"`
-} 
+	TokenAddress  common.Address `json:"tokenAddress"`
+	BeforeBalance *big.Int       `json:"beforeBalance"`
+	AfterBalance  *big.Int       `json:"afterBalance"`
+	Difference    *big.Int       `json:"difference"`
+	HasChange     bool           `json:"hasChange"`
+}

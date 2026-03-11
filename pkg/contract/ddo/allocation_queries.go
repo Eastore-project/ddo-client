@@ -26,10 +26,10 @@ func getInt64Field(v reflect.Value, names ...string) int64 {
 // Uses the getAllocationIdsForClient getter function
 func (c *Client) GetAllocationIdsForClient(clientAddress string) ([]uint64, error) {
 	var result []interface{}
-	
+
 	// Convert string address to common.Address
 	addr := common.HexToAddress(clientAddress)
-	
+
 	// Use the dedicated getter function
 	err := c.contract.Call(nil, &result, "getAllocationIdsForClient", addr)
 	if err != nil {
@@ -65,7 +65,7 @@ func (c *Client) GetAllocationIdsForClient(clientAddress string) ([]uint64, erro
 // Uses the getAllocationIdsForProvider getter function
 func (c *Client) GetAllocationIdsForProvider(providerId uint64) ([]uint64, error) {
 	var result []interface{}
-	
+
 	// Use the dedicated getter function
 	err := c.contract.Call(nil, &result, "getAllocationIdsForProvider", providerId)
 	if err != nil {
@@ -129,10 +129,10 @@ func (c *Client) GetAllocationInfo(allocationId uint64) (*types.AllocationInfo, 
 // GetClaimInfoForClient gets claim information for a specific client address and claim ID
 func (c *Client) GetClaimInfoForClient(clientAddress string, claimId uint64) ([]types.Claim, error) {
 	var result []interface{}
-	
+
 	// Convert string address to common.Address
 	addr := common.HexToAddress(clientAddress)
-	
+
 	err := c.contract.Call(nil, &result, "getClaimInfoForClient", addr, claimId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call contract: %w", err)
@@ -142,17 +142,17 @@ func (c *Client) GetClaimInfoForClient(clientAddress string, claimId uint64) ([]
 	}
 
 	// Try different possible struct formats that go-ethereum might use
-	
+
 	// First try with camelCase field names (go-ethereum automatic conversion)
 	if claimsSlice, ok := result[0].([]struct {
-		Provider  uint64 `json:"provider"`
-		Client    uint64 `json:"client"`
+		Provider  uint64  `json:"provider"`
+		Client    uint64  `json:"client"`
 		Data      []uint8 `json:"data"`
-		Size      uint64 `json:"size"`
-		TermMin   int64  `json:"term_min"`
-		TermMax   int64  `json:"term_max"`
-		TermStart int64  `json:"term_start"`
-		Sector    uint64 `json:"sector"`
+		Size      uint64  `json:"size"`
+		TermMin   int64   `json:"term_min"`
+		TermMax   int64   `json:"term_max"`
+		TermStart int64   `json:"term_start"`
+		Sector    uint64  `json:"sector"`
 	}); ok {
 		// Convert to our types.Claim slice
 		claims := make([]types.Claim, len(claimsSlice))
@@ -173,14 +173,14 @@ func (c *Client) GetClaimInfoForClient(clientAddress string, claimId uint64) ([]
 
 	// Try with snake_case field names
 	if claimsSlice, ok := result[0].([]struct {
-		Provider   uint64 `json:"provider"`
-		Client     uint64 `json:"client"`
+		Provider   uint64  `json:"provider"`
+		Client     uint64  `json:"client"`
 		Data       []uint8 `json:"data"`
-		Size       uint64 `json:"size"`
-		Term_min   int64  `json:"term_min"`
-		Term_max   int64  `json:"term_max"`
-		Term_start int64  `json:"term_start"`
-		Sector     uint64 `json:"sector"`
+		Size       uint64  `json:"size"`
+		Term_min   int64   `json:"term_min"`
+		Term_max   int64   `json:"term_max"`
+		Term_start int64   `json:"term_start"`
+		Sector     uint64  `json:"sector"`
 	}); ok {
 		// Convert to our types.Claim slice
 		claims := make([]types.Claim, len(claimsSlice))
@@ -204,10 +204,10 @@ func (c *Client) GetClaimInfoForClient(clientAddress string, claimId uint64) ([]
 	if reflect.TypeOf(resultSlice).Kind() == reflect.Slice {
 		v := reflect.ValueOf(resultSlice)
 		claims := make([]types.Claim, v.Len())
-		
+
 		for i := 0; i < v.Len(); i++ {
 			claimValue := v.Index(i)
-			
+
 			claims[i] = types.Claim{
 				Provider:  claimValue.FieldByName("Provider").Uint(),
 				Client:    claimValue.FieldByName("Client").Uint(),

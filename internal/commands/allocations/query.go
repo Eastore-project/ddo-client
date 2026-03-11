@@ -83,9 +83,9 @@ func executeQuery(c *cli.Context) error {
 		return fmt.Errorf("must specify either --client-address, --provider-id, or --allocation-id")
 	}
 
-	if (clientAddress != "" && providerId != 0) || 
-	   (clientAddress != "" && allocationId != 0) || 
-	   (providerId != 0 && allocationId != 0) {
+	if (clientAddress != "" && providerId != 0) ||
+		(clientAddress != "" && allocationId != 0) ||
+		(providerId != 0 && allocationId != 0) {
 		return fmt.Errorf("can only specify one of --client-address, --provider-id, or --allocation-id")
 	}
 
@@ -153,7 +153,7 @@ func executeQuery(c *cli.Context) error {
 			fmt.Printf("   Commission Rate BPS: %s\n", railView.CommissionRateBps.String())
 			fmt.Printf("   Service Fee Recipient: %s\n", railView.ServiceFeeRecipient.Hex())
 		}
-		
+
 	} else if clientAddress != "" {
 		// Query allocations for client
 		fmt.Printf("🔍 Querying allocations for client: %s\n", clientAddress)
@@ -200,4 +200,4 @@ func executeQuery(c *cli.Context) error {
 	}
 
 	return nil
-} 
+}

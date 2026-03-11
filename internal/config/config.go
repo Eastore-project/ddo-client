@@ -39,4 +39,4 @@ func GetMissingConfig() []string {
 		missing = append(missing, "PRIVATE_KEY or --private-key flag")
 	}
 	return missing
-} 
+}

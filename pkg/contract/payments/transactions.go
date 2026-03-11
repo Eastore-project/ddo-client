@@ -21,7 +21,7 @@ func (c *Client) SetOperatorApproval(
 		return "", fmt.Errorf("client not configured for transactions")
 	}
 
-	tx, err := c.contract.Transact(c.auth, "setOperatorApproval", 
+	tx, err := c.contract.Transact(c.auth, "setOperatorApproval",
 		token, operator, approved, rateAllowance, lockupAllowance, maxLockupPeriod)
 	if err != nil {
 		return "", fmt.Errorf("failed to set operator approval: %w", err)
@@ -187,4 +187,4 @@ func (c *Client) WaitForTransaction(txHash string) (*types.Receipt, error) {
 	// Note: This is a placeholder implementation
 	// In a real implementation, you would need the actual transaction object
 	return nil, fmt.Errorf("WaitForTransaction not fully implemented - use specific transaction methods")
-} 
+}

@@ -36,7 +36,17 @@ contract ViewFacet {
         )
     {
         LibDDOStorage.AllocationInfo storage info = LibDDOStorage.getStorage().allocationInfos[allocationId];
-        return (info.client, info.provider, info.activated, info.pieceCidHash, info.paymentToken, info.pieceSize, info.railId, info.pricePerBytePerEpoch, info.sectorNumber);
+        return (
+            info.client,
+            info.provider,
+            info.activated,
+            info.pieceCidHash,
+            info.paymentToken,
+            info.pieceSize,
+            info.railId,
+            info.pricePerBytePerEpoch,
+            info.sectorNumber
+        );
     }
 
     function getAllocationRailInfo(uint64 allocationId)

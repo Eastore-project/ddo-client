@@ -41,10 +41,10 @@ type RetrievalV1 struct {
 
 // DataSource describes the data being submitted.
 type DataSource struct {
-	PieceCID      cid.Cid          `json:"piece_cid"`
-	Format        PieceDataFormat  `json:"format"`
-	SourceHttpPut *DataSourcePut   `json:"source_http_put,omitempty"`
-	SourceHTTP    *DataSourceHTTP  `json:"source_http,omitempty"`
+	PieceCID      cid.Cid         `json:"piece_cid"`
+	Format        PieceDataFormat `json:"format"`
+	SourceHttpPut *DataSourcePut  `json:"source_http_put,omitempty"`
+	SourceHTTP    *DataSourceHTTP `json:"source_http,omitempty"`
 }
 
 // PieceDataFormat specifies the format of the piece data.

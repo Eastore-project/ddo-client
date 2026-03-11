@@ -179,7 +179,7 @@ func executeApproveToken(c *cli.Context) error {
 	}
 
 	fmt.Printf("✅ Approval transaction sent: %s\n", txHash)
-	
+
 	// Wait for transaction to be mined using the ERC20 client's ethclient
 	fmt.Printf("⏳ Waiting for transaction to be mined...\n")
 	if err := utils.WaitForTransaction(erc20Client.GetEthClient(), txHash); err != nil {
@@ -196,6 +196,6 @@ func executeApproveToken(c *cli.Context) error {
 
 	fmt.Printf("🎉 Approval successful!\n")
 	fmt.Printf("   New Allowance: %s\n", newAllowance.String())
-	
+
 	return nil
-} 
+}

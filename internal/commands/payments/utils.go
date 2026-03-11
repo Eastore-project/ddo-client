@@ -58,4 +58,4 @@ func validatePrivateKeyConfig(c *cli.Context) error {
 	}
 
 	return nil
-} 
+}

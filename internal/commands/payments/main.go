@@ -20,8 +20,7 @@ func PaymentsCommand() *cli.Command {
 			WithdrawCommand(),
 		},
 	}
-} 
-
+}
 
 var paymentsFlags = []cli.Flag{
 	&cli.StringFlag{

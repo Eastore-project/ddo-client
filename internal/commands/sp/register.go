@@ -96,9 +96,9 @@ func RegisterCommand() *cli.Command {
 
 // TokenConfigInput represents token configuration from CLI input
 type TokenConfigInput struct {
-	Token               string `json:"token"`
+	Token                 string `json:"token"`
 	PriceUSDPerTBPerMonth string `json:"priceUSDPerTBPerMonth"`
-	IsActive            bool   `json:"isActive"`
+	IsActive              bool   `json:"isActive"`
 }
 
 // TokenConfigFile represents the structure of the tokens JSON file
@@ -146,7 +146,7 @@ func executeRegisterSP(c *cli.Context) error {
 
 	// Parse token configurations
 	var tokenInputs []TokenConfigInput
-	
+
 	// First check if tokens file is provided
 	if tokensFile := c.String("tokens-file"); tokensFile != "" {
 		data, err := os.ReadFile(tokensFile)
@@ -174,9 +174,9 @@ func executeRegisterSP(c *cli.Context) error {
 			}
 
 			tokenInputs = append(tokenInputs, TokenConfigInput{
-				Token:               parts[0],
+				Token:                 parts[0],
 				PriceUSDPerTBPerMonth: parts[1],
-				IsActive:           true,
+				IsActive:              true,
 			})
 		}
 	}
@@ -195,14 +195,14 @@ func executeRegisterSP(c *cli.Context) error {
 		}
 
 		tokenConfigs[i] = types.TokenConfig{
-			Token:               common.HexToAddress(tokenInput.Token),
+			Token:                common.HexToAddress(tokenInput.Token),
 			PricePerBytePerEpoch: pricePerBytePerEpoch,
-			IsActive:            tokenInput.IsActive,
+			IsActive:             tokenInput.IsActive,
 		}
 
 		// Show both formats for clarity
-		fmt.Printf("   Token %s: %s\n", 
-			tokenInput.Token, 
+		fmt.Printf("   Token %s: %s\n",
+			tokenInput.Token,
 			utils.FormatPriceBothFormats(pricePerBytePerEpoch))
 	}
 
@@ -220,12 +220,12 @@ func executeRegisterSP(c *cli.Context) error {
 	fmt.Printf("📋 Storage Provider Registration Details:\n")
 	fmt.Printf("   Actor ID: %d\n", regParams.ActorId)
 	fmt.Printf("   Payment Address: %s\n", regParams.PaymentAddress.Hex())
-	fmt.Printf("   Piece Size Range: %s - %s\n", 
+	fmt.Printf("   Piece Size Range: %s - %s\n",
 		utils.FormatBytes(new(big.Int).SetUint64(regParams.MinPieceSize)),
 		utils.FormatBytes(new(big.Int).SetUint64(regParams.MaxPieceSize)))
 	fmt.Printf("   Term Range: %d - %d epochs\n", regParams.MinTermLength, regParams.MaxTermLength)
-	fmt.Printf("   Term Range (days): ~%.1f - ~%.1f days\n", 
-		float64(regParams.MinTermLength)/2880.0, 
+	fmt.Printf("   Term Range (days): ~%.1f - ~%.1f days\n",
+		float64(regParams.MinTermLength)/2880.0,
 		float64(regParams.MaxTermLength)/2880.0)
 	fmt.Println()
 
@@ -255,7 +255,7 @@ func executeRegisterSP(c *cli.Context) error {
 			fmt.Printf("⚠️  Could not check SP registration status: %v\n", err)
 		} else if isRegistered {
 			fmt.Printf("⚠️  Storage Provider %d is already registered\n", actorId)
-			
+
 			// Get existing config
 			existingConfig, err := ddoClient.GetSPConfig(actorId)
 			if err != nil {
@@ -263,7 +263,7 @@ func executeRegisterSP(c *cli.Context) error {
 			} else {
 				fmt.Printf("📋 Current Configuration:\n")
 				fmt.Printf("   Payment Address: %s\n", existingConfig.PaymentAddress.Hex())
-				fmt.Printf("   Piece Size Range: %s - %s\n", 
+				fmt.Printf("   Piece Size Range: %s - %s\n",
 					utils.FormatBytes(new(big.Int).SetUint64(existingConfig.MinPieceSize)),
 					utils.FormatBytes(new(big.Int).SetUint64(existingConfig.MaxPieceSize)))
 				fmt.Printf("   Term Range: %d - %d epochs\n", existingConfig.MinTermLength, existingConfig.MaxTermLength)
@@ -273,7 +273,7 @@ func executeRegisterSP(c *cli.Context) error {
 		} else {
 			fmt.Printf("✅ Storage Provider %d is not registered yet\n", actorId)
 		}
-		
+
 		fmt.Printf("Configuration validated successfully!\n")
 		fmt.Printf("Contract: %s\n", config.ContractAddress)
 		fmt.Printf("RPC: %s\n", config.RPCEndpoint)
@@ -302,7 +302,7 @@ func executeRegisterSP(c *cli.Context) error {
 
 	fmt.Printf("✅ Registration successful!\n")
 	fmt.Printf("Transaction Hash: %s\n", txHash)
-	
+
 	// Wait for transaction to be mined using the existing client
 	fmt.Printf("⏳ Waiting for transaction to be mined...\n")
 	if err := utils.WaitForTransaction(ddoClient.GetEthClient(), txHash); err != nil {
@@ -311,6 +311,6 @@ func executeRegisterSP(c *cli.Context) error {
 	}
 
 	fmt.Printf("✅ Registration transaction mined successfully!\n")
-	
+
 	return nil
-} 
+}

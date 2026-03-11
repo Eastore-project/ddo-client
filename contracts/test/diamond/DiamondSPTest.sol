@@ -24,10 +24,7 @@ contract DiamondSPTest is DiamondBaseTest {
         assertEq(sp1MaxTerm, 5256000, "SP1 max term should be ~1820 days");
         assertTrue(sp1Active, "SP1 should be active");
 
-        (
-            address sp2PaymentAddr,
-            ,,,, bool sp2Active
-        ) = spDiamond.spConfigs(SP2_ACTOR_ID);
+        (address sp2PaymentAddr,,,,, bool sp2Active) = spDiamond.spConfigs(SP2_ACTOR_ID);
 
         assertEq(sp2PaymentAddr, sp2PaymentAddress, "SP2 payment address should match");
         assertTrue(sp2Active, "SP2 should be active");
@@ -63,15 +60,7 @@ contract DiamondSPTest is DiamondBaseTest {
             isActive: true
         });
 
-        spDiamond.registerSP(
-            newSPId,
-            newSPPaymentAddress,
-            2048,
-            uint64(PIECE_SIZE),
-            172800,
-            2628000,
-            tokenConfigs
-        );
+        spDiamond.registerSP(newSPId, newSPPaymentAddress, 2048, uint64(PIECE_SIZE), 172800, 2628000, tokenConfigs);
 
         (address paymentAddr, uint64 minPiece, uint64 maxPiece, int64 minTerm, int64 maxTerm, bool isActive) =
             spDiamond.spConfigs(newSPId);
@@ -141,15 +130,7 @@ contract DiamondSPTest is DiamondBaseTest {
         });
 
         vm.expectRevert(abi.encodeWithSignature("DDOSp__SPAlreadyRegistered()"));
-        spDiamond.registerSP(
-            SP1_ACTOR_ID,
-            sp1PaymentAddress,
-            1024,
-            uint64(PIECE_SIZE),
-            86400,
-            5256000,
-            tokenConfigs
-        );
+        spDiamond.registerSP(SP1_ACTOR_ID, sp1PaymentAddress, 1024, uint64(PIECE_SIZE), 86400, 5256000, tokenConfigs);
     }
 
     function test_RevertWhen_UpdateNonExistentSP() public {

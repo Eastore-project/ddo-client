@@ -144,7 +144,14 @@ contract SPFacet {
     function spConfigs(uint64 actorId)
         external
         view
-        returns (address paymentAddress, uint64 minPieceSize, uint64 maxPieceSize, int64 minTermLength, int64 maxTermLength, bool isActive)
+        returns (
+            address paymentAddress,
+            uint64 minPieceSize,
+            uint64 maxPieceSize,
+            int64 minTermLength,
+            int64 maxTermLength,
+            bool isActive
+        )
     {
         LibDDOStorage.SPConfig storage config = LibDDOStorage.getStorage().spConfigs[actorId];
         return (
@@ -157,11 +164,7 @@ contract SPFacet {
         );
     }
 
-    function getSPTokenPrice(uint64 actorId, address token)
-        external
-        view
-        returns (uint256 price, bool isActive)
-    {
+    function getSPTokenPrice(uint64 actorId, address token) external view returns (uint256 price, bool isActive) {
         LibDDOStorage.DDOState storage s = LibDDOStorage.getStorage();
         _enforceRegisteredSP(s, actorId);
 
@@ -281,13 +284,25 @@ contract SPFacet {
     function getSPBasicInfo(uint64 actorId)
         external
         view
-        returns (address paymentAddress, bool isActive, uint256 supportedTokenCount, uint64 minPieceSize, uint64 maxPieceSize)
+        returns (
+            address paymentAddress,
+            bool isActive,
+            uint256 supportedTokenCount,
+            uint64 minPieceSize,
+            uint64 maxPieceSize
+        )
     {
         LibDDOStorage.DDOState storage s = LibDDOStorage.getStorage();
         _enforceRegisteredSP(s, actorId);
 
         LibDDOStorage.SPConfig memory config = s.spConfigs[actorId];
-        return (config.paymentAddress, config.isActive, config.supportedTokens.length, config.minPieceSize, config.maxPieceSize);
+        return (
+            config.paymentAddress,
+            config.isActive,
+            config.supportedTokens.length,
+            config.minPieceSize,
+            config.maxPieceSize
+        );
     }
 
     function getAndValidateSPPrice(uint64 actorId, address token)

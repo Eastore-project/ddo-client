@@ -1,8 +1,8 @@
 package ddo
 
 import (
-	"github.com/Eastore-project/ddo-client/pkg/types"
 	"fmt"
+	"github.com/Eastore-project/ddo-client/pkg/types"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -11,7 +11,7 @@ import (
 // CalculateStorageCost calculates the storage cost for a specific piece
 func (c *Client) CalculateStorageCost(providerId uint64, token common.Address, pieceSize uint64, termLength int64) (*big.Int, error) {
 	var result []interface{}
-	
+
 	err := c.contract.Call(nil, &result, "calculateStorageCost", providerId, token, pieceSize, termLength)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate storage cost: %w", err)
@@ -31,7 +31,7 @@ func (c *Client) CalculateStorageCost(providerId uint64, token common.Address, p
 // GetAndValidateSPPrice gets and validates the storage provider's price per byte per epoch
 func (c *Client) GetAndValidateSPPrice(providerId uint64, token common.Address) (*big.Int, error) {
 	var result []interface{}
-	
+
 	err := c.contract.Call(nil, &result, "getAndValidateSPPrice", providerId, token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SP price: %w", err)
@@ -46,8 +46,7 @@ func (c *Client) GetAndValidateSPPrice(providerId uint64, token common.Address) 
 	}
 
 	return big.NewInt(0), fmt.Errorf("unexpected result type: %T", result[0])
-} 
-
+}
 
 // GetSPSupportedTokensFromContract calls the contract's getSPSupportedTokens function directly
 func (c *Client) GetSPSupportedTokensFromContract(actorId uint64) ([]types.TokenConfig, error) {
@@ -63,16 +62,16 @@ func (c *Client) GetSPSupportedTokensFromContract(actorId uint64) ([]types.Token
 	if len(supportedTokensRaw) > 0 {
 		// The first element should be the array of TokenConfig structs
 		if tokenArray, ok := supportedTokensRaw[0].([]struct {
-			Token               common.Address `json:"token"`
+			Token                common.Address `json:"token"`
 			PricePerBytePerEpoch *big.Int       `json:"pricePerBytePerEpoch"`
-			IsActive            bool           `json:"isActive"`
+			IsActive             bool           `json:"isActive"`
 		}); ok {
 			supportedTokens = make([]types.TokenConfig, len(tokenArray))
 			for i, token := range tokenArray {
 				supportedTokens[i] = types.TokenConfig{
-					Token:               token.Token,
+					Token:                token.Token,
 					PricePerBytePerEpoch: token.PricePerBytePerEpoch,
-					IsActive:            token.IsActive,
+					IsActive:             token.IsActive,
 				}
 			}
 		} else {
@@ -87,7 +86,7 @@ func (c *Client) GetSPSupportedTokensFromContract(actorId uint64) ([]types.Token
 func (c *Client) GetSPConfig(actorId uint64) (*types.SPConfig, error) {
 	// Call the contract and see what we get
 	var result []interface{}
-	
+
 	err := c.contract.Call(nil, &result, "spConfigs", actorId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call spConfigs: %w", err)
@@ -181,4 +180,4 @@ func (c *Client) GetSPPaymentAddress(actorId uint64) (common.Address, error) {
 		return common.Address{}, fmt.Errorf("SP %d not registered", actorId)
 	}
 	return config.PaymentAddress, nil
-} 
+}

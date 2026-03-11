@@ -24,10 +24,14 @@ library VerifRegSerializationDiamond {
             capacity += _getBytesSize(allocationRequests[i].data);
             capacity += _getPrefixSize(allocationRequests[i].size);
             capacity += _getPrefixSize(
-                uint64(allocationRequests[i].termMin >= 0 ? allocationRequests[i].termMin : -allocationRequests[i].termMin)
+                uint64(
+                    allocationRequests[i].termMin >= 0 ? allocationRequests[i].termMin : -allocationRequests[i].termMin
+                )
             );
             capacity += _getPrefixSize(
-                uint64(allocationRequests[i].termMax >= 0 ? allocationRequests[i].termMax : -allocationRequests[i].termMax)
+                uint64(
+                    allocationRequests[i].termMax >= 0 ? allocationRequests[i].termMax : -allocationRequests[i].termMax
+                )
             );
             capacity += _getPrefixSize(
                 uint64(
@@ -61,7 +65,10 @@ library VerifRegSerializationDiamond {
     function deserializeVerifregOperatorData(bytes memory cborData)
         internal
         pure
-        returns (LibDDOStorage.ProviderClaim[] memory claimExtensions, LibDDOStorage.AllocationRequest[] memory allocationRequests)
+        returns (
+            LibDDOStorage.ProviderClaim[] memory claimExtensions,
+            LibDDOStorage.AllocationRequest[] memory allocationRequests
+        )
     {
         uint256 byteIdx = 0;
         uint256 operatorDataLength;

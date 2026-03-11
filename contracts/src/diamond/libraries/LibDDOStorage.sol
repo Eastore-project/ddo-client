@@ -13,19 +13,19 @@ library LibDDOStorage {
     //////////////////////////////////////////////////////////////*/
 
     struct AllocationInfo {
-        address client;               // 20 bytes ─┐ slot 0 (29 bytes)
-        uint64 provider;              //  8 bytes  │
-        bool activated;               //  1 byte  ─┘
-        bytes32 pieceCidHash;         // 32 bytes ── slot 1
-        address paymentToken;         // 20 bytes ─┐ slot 2 (28 bytes)
-        uint64 pieceSize;             //  8 bytes ─┘
-        uint256 railId;               // 32 bytes ── slot 3
+        address client; // 20 bytes ─┐ slot 0 (29 bytes)
+        uint64 provider; //  8 bytes  │
+        bool activated; //  1 byte  ─┘
+        bytes32 pieceCidHash; // 32 bytes ── slot 1
+        address paymentToken; // 20 bytes ─┐ slot 2 (28 bytes)
+        uint64 pieceSize; //  8 bytes ─┘
+        uint256 railId; // 32 bytes ── slot 3
         uint256 pricePerBytePerEpoch; // 32 bytes ── slot 4 (locked at allocation time)
-        uint64 sectorNumber;          //  8 bytes ── slot 5 (set during activation)
-        // NOTE: sectorNumber defaults to 0, which is also a valid Filecoin sector number.
-        // Use the `activated` flag to distinguish unassigned (activated=false, sectorNumber=0)
-        // from an allocation genuinely sealed into sector 0 (activated=true, sectorNumber=0).
-        // The payment rail rate is 0 for non-activated allocations, so settlement is a no-op.
+        uint64 sectorNumber; //  8 bytes ── slot 5 (set during activation)
+            // NOTE: sectorNumber defaults to 0, which is also a valid Filecoin sector number.
+            // Use the `activated` flag to distinguish unassigned (activated=false, sectorNumber=0)
+            // from an allocation genuinely sealed into sector 0 (activated=true, sectorNumber=0).
+            // The payment rail rate is 0 for non-activated allocations, so settlement is a no-op.
     }
 
     struct TokenConfig {
@@ -141,11 +141,7 @@ library LibDDOStorage {
     event ReceivedDataCap(string message);
 
     event AllocationActivated(
-        uint64 indexed allocationId,
-        uint64 indexed provider,
-        uint64 sector,
-        uint256 railId,
-        uint256 paymentRate
+        uint64 indexed allocationId, uint64 indexed provider, uint64 sector, uint256 railId, uint256 paymentRate
     );
 
     event SPRegistered(
@@ -159,10 +155,7 @@ library LibDDOStorage {
     );
 
     event SPTokenConfigUpdated(
-        uint64 indexed actorId,
-        address indexed token,
-        uint256 pricePerBytePerEpoch,
-        bool isActive
+        uint64 indexed actorId, address indexed token, uint256 pricePerBytePerEpoch, bool isActive
     );
 
     event SPConfigUpdated(uint64 indexed actorId);

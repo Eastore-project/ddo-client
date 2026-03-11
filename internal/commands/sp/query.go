@@ -122,20 +122,20 @@ func executeQuerySP(c *cli.Context) error {
 	fmt.Println()
 
 	fmt.Printf("📏 Capacity Limits:\n")
-	fmt.Printf("   Min Piece Size: %s (%d bytes)\n", 
-		utils.FormatBytes(new(big.Int).SetUint64(spConfig.MinPieceSize)), 
+	fmt.Printf("   Min Piece Size: %s (%d bytes)\n",
+		utils.FormatBytes(new(big.Int).SetUint64(spConfig.MinPieceSize)),
 		spConfig.MinPieceSize)
-	fmt.Printf("   Max Piece Size: %s (%d bytes)\n", 
-		utils.FormatBytes(new(big.Int).SetUint64(spConfig.MaxPieceSize)), 
+	fmt.Printf("   Max Piece Size: %s (%d bytes)\n",
+		utils.FormatBytes(new(big.Int).SetUint64(spConfig.MaxPieceSize)),
 		spConfig.MaxPieceSize)
 	fmt.Println()
 
 	fmt.Printf("⏰ Term Limits:\n")
-	fmt.Printf("   Min Term: %d epochs (~%.1f days)\n", 
-		spConfig.MinTermLength, 
+	fmt.Printf("   Min Term: %d epochs (~%.1f days)\n",
+		spConfig.MinTermLength,
 		float64(spConfig.MinTermLength)/2880.0)
-	fmt.Printf("   Max Term: %d epochs (~%.1f days)\n", 
-		spConfig.MaxTermLength, 
+	fmt.Printf("   Max Term: %d epochs (~%.1f days)\n",
+		spConfig.MaxTermLength,
 		float64(spConfig.MaxTermLength)/2880.0)
 	fmt.Println()
 
@@ -152,14 +152,14 @@ func executeQuerySP(c *cli.Context) error {
 			fmt.Printf("   %d. %s\n", i+1, status)
 			fmt.Printf("      Token Address: %s\n", token.Token.Hex())
 			fmt.Printf("      Price: %s\n", utils.FormatPriceBothFormats(token.PricePerBytePerEpoch))
-			
+
 			// Calculate example costs for common scenarios
 			exampleSizes := []uint64{
-				1024 * 1024,                    // 1 MB
-				1024 * 1024 * 1024,             // 1 GB
-				32 * 1024 * 1024 * 1024,        // 32 GB
+				1024 * 1024,             // 1 MB
+				1024 * 1024 * 1024,      // 1 GB
+				32 * 1024 * 1024 * 1024, // 32 GB
 			}
-			
+
 			exampleTerms := []int64{
 				86400,   // 30 days
 				518400,  // 180 days
@@ -176,7 +176,7 @@ func executeQuerySP(c *cli.Context) error {
 								new(big.Int).SetUint64(size),
 							)
 							cost.Mul(cost, big.NewInt(term))
-							
+
 							fmt.Printf("        %s for %d days: %s USDC\n",
 								utils.FormatBytes(new(big.Int).SetUint64(size)),
 								term/2880,
@@ -185,7 +185,7 @@ func executeQuerySP(c *cli.Context) error {
 					}
 				}
 			}
-			
+
 			if i < len(spConfig.SupportedTokens)-1 {
 				fmt.Println()
 			}
@@ -193,4 +193,4 @@ func executeQuerySP(c *cli.Context) error {
 	}
 
 	return nil
-} 
+}

@@ -44,9 +44,9 @@ func SettleCommand() *cli.Command {
 				Usage:   "Private key (overrides PRIVATE_KEY env var)",
 			},
 			&cli.Uint64Flag{
-				Name:     "provider",
-				Aliases:  []string{"p"},
-				Usage:    "Storage provider ID (required if allocation-id is not specified)",
+				Name:    "provider",
+				Aliases: []string{"p"},
+				Usage:   "Storage provider ID (required if allocation-id is not specified)",
 			},
 			&cli.Uint64Flag{
 				Name:    "allocation-id",
@@ -189,10 +189,10 @@ func executeSettle(c *cli.Context) error {
 			status = "active"
 		}
 		if tokenConfig.Token.Hex() == "0x0000000000000000000000000000000000000000" {
-			fmt.Printf("   %d. Native Token (FIL) - %s (price: %s)\n", 
+			fmt.Printf("   %d. Native Token (FIL) - %s (price: %s)\n",
 				i+1, status, utils.FormatPriceBothFormats(tokenConfig.PricePerBytePerEpoch))
 		} else {
-			fmt.Printf("   %d. %s - %s (price: %s)\n", 
+			fmt.Printf("   %d. %s - %s (price: %s)\n",
 				i+1, tokenConfig.Token.Hex(), status, utils.FormatPriceBothFormats(tokenConfig.PricePerBytePerEpoch))
 		}
 	}
@@ -202,13 +202,13 @@ func executeSettle(c *cli.Context) error {
 		if allocationId > 0 {
 			fmt.Printf("   Mode: Single Allocation Settlement\n")
 			fmt.Printf("   Allocation ID: %d\n", allocationId)
-			
+
 			// Get allocation details for dry run
 			railId, providerIdFromAllocation, railView, err := ddoClient.GetAllocationRailInfo(allocationId)
 			if err != nil {
 				return fmt.Errorf("failed to get allocation rail info: %v", err)
 			}
-			
+
 			fmt.Printf("\n📊 Allocation Details:\n")
 			fmt.Printf("   Provider ID: %d\n", providerIdFromAllocation)
 			fmt.Printf("   Rail ID: %d\n", railId)
@@ -218,18 +218,18 @@ func executeSettle(c *cli.Context) error {
 		} else {
 			fmt.Printf("   Mode: Total Provider Settlement\n")
 			fmt.Printf("   Provider ID: %d\n", providerId)
-			
+
 			// Get all allocations for provider for dry run
 			allocationIds, err := ddoClient.GetAllocationIdsForProvider(providerId)
 			if err != nil {
 				return fmt.Errorf("failed to get allocation IDs for provider: %v", err)
 			}
-			
+
 			fmt.Printf("\n📋 Provider Allocation Summary:\n")
 			fmt.Printf("   Total Allocations: %d\n", len(allocationIds))
 			fmt.Printf("   Allocation IDs: %v\n", allocationIds)
 		}
-		
+
 		fmt.Printf("\n📝 Next Steps:\n")
 		fmt.Printf("1. Run without --dry-run to execute settlement\n")
 		fmt.Printf("2. Ensure you have sufficient gas for the transaction(s)\n")
@@ -242,18 +242,18 @@ func executeSettle(c *cli.Context) error {
 		if !tokenConfig.IsActive {
 			continue
 		}
-		
+
 		account, err := paymentsClient.GetAccount(tokenConfig.Token, spConfig.PaymentAddress)
 		if err != nil {
 			fmt.Printf("⚠️  Warning: failed to get account info for token %d (%s): %v\n", i+1, tokenConfig.Token.Hex(), err)
 			continue
 		}
-		
+
 		tokenName := tokenConfig.Token.Hex()
 		if tokenConfig.Token.Hex() == "0x0000000000000000000000000000000000000000" {
 			tokenName = "Native Token (ETH)"
 		}
-		
+
 		fmt.Printf("🔍 SP Account Info (Before) - %s:\n", tokenName)
 		fmt.Printf("   Funds: %s\n", account.Funds.String())
 		fmt.Printf("   Lockup Current: %s\n", account.LockupCurrent.String())
@@ -267,12 +267,12 @@ func executeSettle(c *cli.Context) error {
 	if allocationId > 0 {
 		// Settle specific allocation
 		fmt.Printf("💰 Settling payment for allocation %d until epoch %d...\n", allocationId, untilEpoch)
-		
+
 		txHash, err = ddoClient.SettleSpPayment(allocationId, new(big.Int).SetUint64(untilEpoch))
 		if err != nil {
 			return fmt.Errorf("failed to settle SP payment for allocation %d: %v", allocationId, err)
 		}
-		
+
 		fmt.Printf("Transaction Hash: %s\n", txHash)
 
 		fmt.Printf("⏳ Waiting for settlement transaction to be mined...\n")
@@ -347,18 +347,18 @@ func executeSettle(c *cli.Context) error {
 		if !tokenConfig.IsActive {
 			continue
 		}
-		
+
 		account, err := paymentsClient.GetAccount(tokenConfig.Token, spConfig.PaymentAddress)
 		if err != nil {
 			fmt.Printf("⚠️  Warning: failed to get account info for token %d (%s): %v\n", i+1, tokenConfig.Token.Hex(), err)
 			continue
 		}
-		
+
 		tokenName := tokenConfig.Token.Hex()
 		if tokenConfig.Token.Hex() == "0x0000000000000000000000000000000000000000" {
 			tokenName = "Native Token (ETH)"
 		}
-		
+
 		fmt.Printf("🔍 SP Account Info (After) - %s:\n", tokenName)
 		fmt.Printf("   Funds: %s\n", account.Funds.String())
 		fmt.Printf("   Lockup Current: %s\n", account.LockupCurrent.String())
@@ -368,4 +368,4 @@ func executeSettle(c *cli.Context) error {
 	}
 
 	return nil
-} 
+}

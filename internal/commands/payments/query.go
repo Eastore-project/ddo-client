@@ -91,7 +91,6 @@ func QueryRailCommand() *cli.Command {
 	}
 }
 
-
 // Query command implementations
 
 func executeQueryContractInfo(c *cli.Context) error {
@@ -229,5 +228,3 @@ func executeQueryRail(c *cli.Context) error {
 
 	return nil
 }
-
- 

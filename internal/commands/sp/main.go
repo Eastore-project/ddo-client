@@ -19,4 +19,4 @@ func SPCommand() *cli.Command {
 			SettleCommand(),
 		},
 	}
-} 
+}

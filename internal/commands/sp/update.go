@@ -264,10 +264,10 @@ func executeUpdateSPConfig(c *cli.Context) error {
 	fmt.Printf("📋 Storage Provider Config Update:\n")
 	fmt.Printf("   Actor ID: %d\n", actorId)
 	fmt.Printf("   Payment Address: %s → %s\n", currentConfig.PaymentAddress.Hex(), paymentAddress)
-	fmt.Printf("   Min Piece Size: %s → %s\n", 
+	fmt.Printf("   Min Piece Size: %s → %s\n",
 		utils.FormatBytes(new(big.Int).SetUint64(currentConfig.MinPieceSize)),
 		utils.FormatBytes(new(big.Int).SetUint64(minPieceSize)))
-	fmt.Printf("   Max Piece Size: %s → %s\n", 
+	fmt.Printf("   Max Piece Size: %s → %s\n",
 		utils.FormatBytes(new(big.Int).SetUint64(currentConfig.MaxPieceSize)),
 		utils.FormatBytes(new(big.Int).SetUint64(maxPieceSize)))
 	fmt.Printf("   Min Term: %d → %d epochs\n", currentConfig.MinTermLength, minTerm)
@@ -296,7 +296,7 @@ func executeUpdateSPConfig(c *cli.Context) error {
 
 	fmt.Printf("✅ Update successful!\n")
 	fmt.Printf("Transaction Hash: %s\n", txHash)
-	
+
 	// Wait for transaction to be mined using the existing client
 	fmt.Printf("⏳ Waiting for transaction to be mined...\n")
 	if err := utils.WaitForTransaction(ddoClient.GetEthClient(), txHash); err != nil {
@@ -305,7 +305,7 @@ func executeUpdateSPConfig(c *cli.Context) error {
 	}
 
 	fmt.Printf("✅ Update transaction mined successfully!\n")
-	
+
 	return nil
 }
 
@@ -379,7 +379,7 @@ func executeUpdateSPToken(c *cli.Context) error {
 
 	fmt.Printf("✅ Token update successful!\n")
 	fmt.Printf("Transaction Hash: %s\n", txHash)
-	
+
 	// Wait for transaction to be mined using the existing client
 	fmt.Printf("⏳ Waiting for transaction to be mined...\n")
 	if err := utils.WaitForTransaction(ddoClient.GetEthClient(), txHash); err != nil {
@@ -388,7 +388,7 @@ func executeUpdateSPToken(c *cli.Context) error {
 	}
 
 	fmt.Printf("✅ Token update transaction mined successfully!\n")
-	
+
 	return nil
 }
 
@@ -455,7 +455,7 @@ func executeAddSPToken(c *cli.Context) error {
 
 	fmt.Printf("✅ Token addition successful!\n")
 	fmt.Printf("Transaction Hash: %s\n", txHash)
-	
+
 	// Wait for transaction to be mined using the existing client
 	fmt.Printf("⏳ Waiting for transaction to be mined...\n")
 	if err := utils.WaitForTransaction(ddoClient.GetEthClient(), txHash); err != nil {
@@ -464,6 +464,6 @@ func executeAddSPToken(c *cli.Context) error {
 	}
 
 	fmt.Printf("✅ Token addition transaction mined successfully!\n")
-	
+
 	return nil
-} 
+}

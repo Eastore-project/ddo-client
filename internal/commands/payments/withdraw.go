@@ -155,4 +155,4 @@ func executeWithdraw(c *cli.Context) error {
 	fmt.Printf("   To: %s\n", toAddress.Hex())
 
 	return nil
-} 
+}

@@ -207,9 +207,9 @@ func CheckAndSetupPayments(
 		fmt.Printf("🔧 Updating operator approval...\n")
 		txHash, err = paymentsClient.SetOperatorApproval(
 			tokenAddress,
-			contractAddress, // operator (DDO contract)
-			true,            // approved
-			operatorApproval.RateAllowance,                                      // rate allowance unchanged
+			contractAddress,                // operator (DDO contract)
+			true,                           // approved
+			operatorApproval.RateAllowance, // rate allowance unchanged
 			new(big.Int).Add(operatorApproval.LockupAllowance, lockupAllowance), // lockup allowance (one month of payments)
 			big.NewInt(EPOCHS_PER_MONTH),                                        // max lockup period (1 month)
 		)
