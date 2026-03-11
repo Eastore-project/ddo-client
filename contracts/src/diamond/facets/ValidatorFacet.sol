@@ -16,7 +16,7 @@ contract ValidatorFacet is IValidator {
         if (allocationId != 0) {
             LibDDOStorage.AllocationInfo storage info = s.allocationInfos[allocationId];
             if (info.activated && s.blacklistedSectors[info.provider][info.sectorNumber]) {
-                return ValidationResult({modifiedAmount: 0, settleUpto: fromEpoch, note: "Sector blacklisted"});
+                return ValidationResult({modifiedAmount: 0, settleUpto: toEpoch, note: "Sector blacklisted"});
             }
         }
 
