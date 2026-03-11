@@ -211,7 +211,7 @@ func CheckAndSetupPayments(
 					tokenAddress,
 					contractAddress, // operator (DDO contract)
 					true,           // approved
-					new(big.Int).Add(operatorApproval.RateAllowance, rateAllowance),  // rate allowance
+					operatorApproval.RateAllowance,  // rate allowance unchanged
 					new(big.Int).Add(operatorApproval.LockupAllowance, lockupAllowance),   // lockup allowance (one month of payments)
 					big.NewInt(EPOCHS_PER_MONTH), // max lockup period (1 month)
 				)
