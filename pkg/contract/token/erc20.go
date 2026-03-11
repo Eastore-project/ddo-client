@@ -2,7 +2,6 @@ package token
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
 	"math/big"
 	"strings"
@@ -16,12 +15,12 @@ import (
 
 // ERC20Client handles interactions with ERC20 tokens
 type ERC20Client struct {
-	ethClient   *ethclient.Client
-	contract    *bind.BoundContract
-	tokenAddr   common.Address
-	auth        *bind.TransactOpts
-	abi         abi.ABI
-	privateKey  *ecdsa.PrivateKey
+	ethClient  *ethclient.Client
+	contract   *bind.BoundContract
+	tokenAddr  common.Address
+	auth       *bind.TransactOpts
+	abi        abi.ABI
+	ownsClient bool
 }
 
 // Standard ERC20 ABI (minimal interface for allowance and approve)
@@ -103,7 +102,35 @@ func NewERC20ClientWithParams(rpcEndpoint, tokenAddress, privateKey string) (*ER
 		tokenAddr:  tokenAddr,
 		auth:       auth,
 		abi:        parsedABI,
-		privateKey: privateKeyECDSA,
+		ownsClient: true,
+	}, nil
+}
+
+// NewERC20ClientWithTransactor creates an ERC20 client using an existing
+// ethclient and pre-built TransactOpts. The caller retains ownership of
+// ethClient and must close it separately.
+func NewERC20ClientWithTransactor(ethClient *ethclient.Client, tokenAddress string, auth *bind.TransactOpts) (*ERC20Client, error) {
+	if ethClient == nil {
+		return nil, fmt.Errorf("ethClient must not be nil")
+	}
+	if auth == nil {
+		return nil, fmt.Errorf("auth must not be nil")
+	}
+
+	parsedABI, err := abi.JSON(strings.NewReader(ERC20ABI))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ERC20 ABI: %w", err)
+	}
+
+	tokenAddr := common.HexToAddress(tokenAddress)
+	contract := bind.NewBoundContract(tokenAddr, parsedABI, ethClient, ethClient, ethClient)
+
+	return &ERC20Client{
+		ethClient: ethClient,
+		contract:  contract,
+		tokenAddr: tokenAddr,
+		auth:      auth,
+		abi:       parsedABI,
 	}, nil
 }
 
@@ -123,12 +150,11 @@ func NewERC20ReadOnlyClient(rpcEndpoint, tokenAddress string) (*ERC20Client, err
 	contract := bind.NewBoundContract(tokenAddr, parsedABI, client, nil, nil)
 
 	return &ERC20Client{
-		ethClient: client,
-		contract:  contract,
-		tokenAddr: tokenAddr,
-		auth:      nil,
-		abi:       parsedABI,
-		privateKey: nil,
+		ethClient:  client,
+		contract:   contract,
+		tokenAddr:  tokenAddr,
+		abi:        parsedABI,
+		ownsClient: true,
 	}, nil
 }
 
@@ -202,15 +228,15 @@ func (e *ERC20Client) CheckAndApprove(owner, spender common.Address, requiredAmo
 	// Calculate amount to approve (add some buffer for gas fees and future usage)
 	// Approve 2x the required amount or type(uint256).max for unlimited approval
 	approveAmount := new(big.Int).Mul(requiredAmount, big.NewInt(2))
-	
+
 	// For very large amounts, just use max uint256 for unlimited approval
 	maxUint256 := new(big.Int)
 	maxUint256.SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10)
-	
+
 	if approveAmount.Cmp(maxUint256.Div(maxUint256, big.NewInt(2))) > 0 {
 		approveAmount = maxUint256
 	}
-	
+
 	// Send approval transaction
 	txHash, err := e.Approve(spender, approveAmount)
 	if err != nil {
@@ -230,9 +256,10 @@ func (e *ERC20Client) GetEthClient() *ethclient.Client {
 	return e.ethClient
 }
 
-// Close closes the Ethereum client connection
+// Close closes the Ethereum client connection if this client owns it.
+// Clients created with NewERC20ClientWithTransactor do not own the connection.
 func (e *ERC20Client) Close() {
-	if e.ethClient != nil {
+	if e.ownsClient && e.ethClient != nil {
 		e.ethClient.Close()
 	}
-} 
+}

@@ -2,7 +2,6 @@ package payments
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
 	"strings"
 
@@ -19,7 +18,7 @@ type Client struct {
 	contractAddr common.Address
 	auth         *bind.TransactOpts
 	abi          abi.ABI
-	privateKey   *ecdsa.PrivateKey
+	ownsClient   bool
 }
 
 // NewClientWithParams creates a new payments contract client with specific parameters
@@ -58,7 +57,35 @@ func NewClientWithParams(rpcEndpoint, contractAddress, privateKey string) (*Clie
 		contractAddr: addr,
 		auth:         auth,
 		abi:          parsedABI,
-		privateKey:   privateKeyECDSA,
+		ownsClient:   true,
+	}, nil
+}
+
+// NewClientWithTransactor creates a client using an existing ethclient and
+// pre-built TransactOpts. The caller retains ownership of ethClient and
+// must close it separately; calling Close on this client is a no-op.
+func NewClientWithTransactor(ethClient *ethclient.Client, contractAddress string, auth *bind.TransactOpts) (*Client, error) {
+	if ethClient == nil {
+		return nil, fmt.Errorf("ethClient must not be nil")
+	}
+	if auth == nil {
+		return nil, fmt.Errorf("auth must not be nil")
+	}
+
+	parsedABI, err := abi.JSON(strings.NewReader(PaymentsABI))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Payments ABI: %w", err)
+	}
+
+	addr := common.HexToAddress(contractAddress)
+	contract := bind.NewBoundContract(addr, parsedABI, ethClient, ethClient, ethClient)
+
+	return &Client{
+		ethClient:    ethClient,
+		contract:     contract,
+		contractAddr: addr,
+		auth:         auth,
+		abi:          parsedABI,
 	}, nil
 }
 
@@ -89,6 +116,7 @@ func NewReadOnlyClientWithParams(rpcEndpoint, contractAddress string) (*Client, 
 		contract:     boundContract,
 		contractAddr: contractAddr,
 		abi:          parsedABI,
+		ownsClient:   true,
 	}, nil
 }
 
@@ -102,9 +130,10 @@ func (c *Client) GetEthClient() *ethclient.Client {
 	return c.ethClient
 }
 
-// Close closes the Ethereum client connection
+// Close closes the Ethereum client connection if this client owns it.
+// Clients created with NewClientWithTransactor do not own the connection.
 func (c *Client) Close() {
-	if c.ethClient != nil {
+	if c.ownsClient && c.ethClient != nil {
 		c.ethClient.Close()
 	}
-} 
+}
