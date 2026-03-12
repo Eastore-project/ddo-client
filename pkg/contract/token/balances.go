@@ -1,13 +1,16 @@
 package token
 
 import (
-	"fmt"
 	"math/big"
+
+	logging "github.com/ipfs/go-log/v2"
 
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/Eastore-project/ddo-client/pkg/types"
 )
+
+var log = logging.Logger("ddo/token")
 
 // GetTokenBalances gets the token balances for an address from the supported tokens
 func GetTokenBalances(rpcEndpoint string, supportedTokens []types.TokenConfig, address common.Address) ([]types.TokenBalance, error) {
@@ -30,15 +33,15 @@ func GetTokenBalances(rpcEndpoint string, supportedTokens []types.TokenConfig, a
 		// Create read-only ERC20 client
 		erc20Client, err := NewERC20ReadOnlyClient(rpcEndpoint, tokenConfig.Token.Hex())
 		if err != nil {
-			fmt.Printf("⚠️  Warning: failed to create ERC20 client for token %s: %v\n",
-				tokenConfig.Token.Hex(), err)
+			log.Warnw("failed to create ERC20 client",
+				"token", tokenConfig.Token.Hex(), "error", err)
 			continue
 		}
 
 		balance, err := erc20Client.GetBalance(address)
 		if err != nil {
-			fmt.Printf("⚠️  Warning: failed to get balance for token %s: %v\n",
-				tokenConfig.Token.Hex(), err)
+			log.Warnw("failed to get balance",
+				"token", tokenConfig.Token.Hex(), "error", err)
 			erc20Client.Close()
 			continue
 		}
