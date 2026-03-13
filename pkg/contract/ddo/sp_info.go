@@ -2,11 +2,16 @@ package ddo
 
 import (
 	"fmt"
-	"github.com/Eastore-project/ddo-client/pkg/types"
 	"math/big"
 
+	logging "github.com/ipfs/go-log/v2"
+
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/Eastore-project/ddo-client/pkg/types"
 )
+
+var log = logging.Logger("ddo/contract")
 
 // CalculateStorageCost calculates the storage cost for a specific piece
 func (c *Client) CalculateStorageCost(providerId uint64, token common.Address, pieceSize uint64, termLength int64) (*big.Int, error) {
@@ -75,7 +80,7 @@ func (c *Client) GetSPSupportedTokensFromContract(actorId uint64) ([]types.Token
 				}
 			}
 		} else {
-			fmt.Printf("DEBUG: Could not parse token array, type: %T\n", supportedTokensRaw[0])
+			log.Debugw("could not parse token array", "type", fmt.Sprintf("%T", supportedTokensRaw[0]))
 		}
 	}
 
@@ -138,7 +143,7 @@ func (c *Client) GetSPConfig(actorId uint64) (*types.SPConfig, error) {
 	// Get supported tokens using the dedicated function
 	supportedTokens, err := c.GetSPSupportedTokensFromContract(actorId)
 	if err != nil {
-		fmt.Printf("DEBUG: Failed to get supported tokens: %v\n", err)
+		log.Debugw("failed to get supported tokens", "error", err)
 		supportedTokens = []types.TokenConfig{}
 	}
 

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	logging "github.com/ipfs/go-log/v2"
+
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -15,6 +17,8 @@ import (
 	"github.com/Eastore-project/ddo-client/pkg/contract/token"
 	"github.com/Eastore-project/ddo-client/pkg/types"
 )
+
+var log = logging.Logger("ddo/utils")
 
 const (
 	// EPOCHS_PER_MONTH represents the number of epochs in a month (from DDOSp.sol)
@@ -82,12 +86,11 @@ func CheckAndSetupPayments(
 		requiredDeposit.Mul(totalFixedLockupForDeposit, big.NewInt(2))
 	}
 
-	fmt.Printf("💰 Payment Setup Summary:\n")
-	fmt.Printf("   Token: %s\n", tokenAddress.Hex())
-	fmt.Printf("   Total Storage Cost: %s\n", costResult.TotalCost.String())
-	fmt.Printf("   One Month Allowance: %s\n", oneMonthCost.String())
-	fmt.Printf("   Required Deposit: %s\n", requiredDeposit.String())
-	fmt.Println()
+	log.Infow("payment setup summary",
+		"token", tokenAddress.Hex(),
+		"totalStorageCost", costResult.TotalCost,
+		"oneMonthAllowance", oneMonthCost,
+		"requiredDeposit", requiredDeposit)
 
 	// Check current account balance in payments contract
 	account, err := paymentsClient.GetAccount(tokenAddress, userAddress)
@@ -95,21 +98,20 @@ func CheckAndSetupPayments(
 		return fmt.Errorf("failed to get account info: %w", err)
 	}
 
-	fmt.Printf("📊 Current Account Status:\n")
-	fmt.Printf("   Funds: %s\n", account.Funds.String())
-	fmt.Printf("   Lockup Current: %s\n", account.LockupCurrent.String())
-	fmt.Printf("   Available: %s\n", new(big.Int).Sub(account.Funds, account.LockupCurrent).String())
-	fmt.Println()
+	log.Infow("account status",
+		"funds", account.Funds,
+		"lockupCurrent", account.LockupCurrent,
+		"available", new(big.Int).Sub(account.Funds, account.LockupCurrent))
 
 	// Check if user needs to deposit more funds
 	available := new(big.Int).Sub(account.Funds, account.LockupCurrent)
 	if available.Cmp(requiredDeposit) < 0 {
 		deficit := new(big.Int).Sub(requiredDeposit, available)
-		fmt.Printf("⚠️  Insufficient funds. Need to deposit: %s\n", deficit.String())
+		log.Infow("insufficient funds, depositing", "deficit", deficit)
 
 		// For ERC20 tokens, check and approve allowance before depositing
 		if tokenAddress != common.HexToAddress("0x0") {
-			fmt.Printf("🔍 Checking ERC20 token allowance...\n")
+			log.Info("checking ERC20 token allowance")
 
 			// Create ERC20 client using the caller-supplied transactor
 			erc20Client, err := token.NewERC20ClientWithTransactor(ethClient, tokenAddress.Hex(), auth)
@@ -134,28 +136,23 @@ func CheckAndSetupPayments(
 			}
 
 			if approved {
-				fmt.Printf("✅ Token allowance approved: %s\n", allowanceTx)
-
-				// Wait for approval transaction to be mined before depositing
-				fmt.Printf("⏳ Waiting for allowance transaction to be mined...\n")
+				log.Infow("token allowance approved", "txHash", allowanceTx)
 				if err := WaitForTransaction(ethClient, allowanceTx); err != nil {
-					fmt.Printf("⚠️  Warning: allowance transaction may not have been mined: %v\n", err)
+					log.Warnw("allowance transaction may not have been mined", "error", err)
 				}
 			} else {
-				fmt.Printf("✅ Token allowance already sufficient\n")
+				log.Info("token allowance already sufficient")
 			}
 		}
 
-		// Deposit the required amount
-		fmt.Printf("💸 Depositing %s tokens...\n", deficit.String())
+		log.Infow("depositing tokens", "amount", deficit)
 		txHash, err := paymentsClient.Deposit(tokenAddress, userAddress, deficit)
 		if err != nil {
 			return fmt.Errorf("failed to deposit tokens: %w", err)
 		}
-		fmt.Printf("✅ Deposit transaction sent: %s\n", txHash)
-		fmt.Printf("⏳ Waiting for deposit transaction to be mined...\n")
+		log.Infow("deposit transaction sent", "txHash", txHash)
 		if err := WaitForTransaction(ethClient, txHash); err != nil {
-			fmt.Printf("⚠️  Warning: deposit transaction may not have been mined: %v\n", err)
+			log.Warnw("deposit transaction may not have been mined", "error", err)
 		}
 	}
 
@@ -165,13 +162,12 @@ func CheckAndSetupPayments(
 		return fmt.Errorf("failed to get operator approval: %w", err)
 	}
 
-	fmt.Printf("🔐 Operator Approval Status:\n")
-	fmt.Printf("   Is Approved: %t\n", operatorApproval.IsApproved)
-	fmt.Printf("   Rate Allowance: %s\n", operatorApproval.RateAllowance.String())
-	fmt.Printf("   Lockup Allowance: %s\n", operatorApproval.LockupAllowance.String())
-	fmt.Printf("   Rate Usage: %s\n", operatorApproval.RateUsage.String())
-	fmt.Printf("   Lockup Usage: %s\n", operatorApproval.LockupUsage.String())
-	fmt.Println()
+	log.Infow("operator approval status",
+		"isApproved", operatorApproval.IsApproved,
+		"rateAllowance", operatorApproval.RateAllowance,
+		"lockupAllowance", operatorApproval.LockupAllowance,
+		"rateUsage", operatorApproval.RateUsage,
+		"lockupUsage", operatorApproval.LockupUsage)
 
 	// Set rate allowance to a large number for flexibility
 	rateAllowance := new(big.Int).Mul(costResult.PricePerBytePerEpoch, new(big.Int).SetUint64(costResult.TotalBytes))
@@ -184,7 +180,7 @@ func CheckAndSetupPayments(
 	lockupAllowance := new(big.Int).Mul(totalFixedLockup, big.NewInt(2))
 	var txHash string
 	if !operatorApproval.IsApproved || (new(big.Int).Sub(operatorApproval.RateAllowance, operatorApproval.RateUsage).Cmp(rateAllowance) < 0 && new(big.Int).Sub(operatorApproval.LockupAllowance, operatorApproval.LockupUsage).Cmp(lockupAllowance) < 0) {
-		fmt.Printf("🔧 Setting operator approval...\n")
+		log.Info("setting operator approval")
 		txHash, err = paymentsClient.SetOperatorApproval(
 			tokenAddress,
 			contractAddress, // operator (DDO contract)
@@ -194,7 +190,7 @@ func CheckAndSetupPayments(
 			big.NewInt(EPOCHS_PER_MONTH),                                        // max lockup period (1 month)
 		)
 	} else if new(big.Int).Sub(operatorApproval.RateAllowance, operatorApproval.RateUsage).Cmp(rateAllowance) < 0 {
-		fmt.Printf("🔧 Updating operator approval...\n")
+		log.Info("updating operator approval")
 		txHash, err = paymentsClient.SetOperatorApproval(
 			tokenAddress,
 			contractAddress, // operator (DDO contract)
@@ -204,7 +200,7 @@ func CheckAndSetupPayments(
 			big.NewInt(EPOCHS_PER_MONTH),                                    // max lockup period (1 month)
 		)
 	} else if new(big.Int).Sub(operatorApproval.LockupAllowance, operatorApproval.LockupUsage).Cmp(lockupAllowance) < 0 {
-		fmt.Printf("🔧 Updating operator approval...\n")
+		log.Info("updating operator approval")
 		txHash, err = paymentsClient.SetOperatorApproval(
 			tokenAddress,
 			contractAddress,                // operator (DDO contract)
@@ -214,7 +210,7 @@ func CheckAndSetupPayments(
 			big.NewInt(EPOCHS_PER_MONTH),                                        // max lockup period (1 month)
 		)
 	} else {
-		fmt.Printf("✅ Operator approval already sufficient\n")
+		log.Info("operator approval already sufficient")
 	}
 
 	if err != nil {
@@ -222,11 +218,10 @@ func CheckAndSetupPayments(
 	}
 
 	if txHash != "" {
-		fmt.Printf("⏳ Waiting for operator approval transaction to be mined...\n")
 		if err := WaitForTransaction(ethClient, txHash); err != nil {
-			fmt.Printf("⚠️  Warning: operator approval transaction may not have been mined: %v\n", err)
+			log.Warnw("operator approval transaction may not have been mined", "error", err)
 		}
-		fmt.Printf("✅ Operator approval transaction sent: %s\n", txHash)
+		log.Infow("operator approval transaction sent", "txHash", txHash)
 	}
 
 	return nil
@@ -234,21 +229,12 @@ func CheckAndSetupPayments(
 
 // PromptUserConfirmation prompts the user to confirm payment setup
 func PromptUserConfirmation(totalStorageCost, requiredDeposit, oneMonthAllowance *big.Int, tokenAddress string) error {
-	fmt.Printf("\n🎯 Payment Setup Required:\n")
-	fmt.Printf("   Token: %s\n", tokenAddress)
-	fmt.Printf("   Total Storage Cost: %s\n", totalStorageCost.String())
-	fmt.Printf("   Required Deposit: %s\n", requiredDeposit.String())
-	fmt.Printf("   Operator Allowance: %s\n", oneMonthAllowance.String())
-	fmt.Println()
-
-	fmt.Printf("⚠️  Before proceeding:\n")
-	fmt.Printf("1. Ensure you have enough tokens in your wallet\n")
-	fmt.Printf("2. Approve the payments contract to spend your tokens (if using ERC20)\n")
-	fmt.Printf("3. The system will deposit tokens and set operator approvals\n")
-	fmt.Println()
-
-	// In a real CLI, you might want to add actual user confirmation prompt
-	// For now, we'll assume confirmation
+	log.Infow("payment setup required",
+		"token", tokenAddress,
+		"totalStorageCost", totalStorageCost,
+		"requiredDeposit", requiredDeposit,
+		"operatorAllowance", oneMonthAllowance)
+	log.Info("ensure sufficient token balance, ERC20 approval, and operator approvals before proceeding")
 	return nil
 }
 
@@ -316,9 +302,8 @@ func WaitForTransaction(client *ethclient.Client, txHash string) error {
 	}
 
 	hash := common.HexToHash(txHash)
-	fmt.Printf("⏳ Waiting for transaction %s to be mined...\n", txHash)
+	log.Infow("waiting for transaction", "txHash", txHash)
 
-	// Get the transaction first
 	tx, _, err := client.TransactionByHash(context.Background(), hash)
 	if err != nil {
 		return fmt.Errorf("failed to get transaction: %w", err)
@@ -329,7 +314,7 @@ func WaitForTransaction(client *ethclient.Client, txHash string) error {
 		return fmt.Errorf("transaction failed or timed out: %w", err)
 	}
 
-	fmt.Printf("✅ Transaction mined successfully\n")
+	log.Infow("transaction mined", "txHash", txHash)
 	return nil
 }
 
